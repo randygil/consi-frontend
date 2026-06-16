@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Consi · InVū design system (Aurora direction)
+   cyan→blue→violet gradient · Manrope + JetBrains Mono · cool grays
+   ============================================================ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --font-sans: var(--font-manrope), "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  /* ---- Brand spectrum (the gradient, left → right) ---- */
+  --brand-cyan: #1dc8fe;
+  --brand-sky: #29a6ff;
+  --brand-blue: #2f7bf6; /* primary action anchor */
+  --brand-indigo: #4a63fe;
+  --brand-violet: #7c5cfb;
+  --brand-purple: #9f4dfa;
+
+  /* Blue tints / shades */
+  --blue-700: #1e5fd0;
+  --blue-600: #2570f0;
+  --blue-500: #2f7bf6;
+  --blue-400: #5a98f8;
+  --blue-300: #93bcfb;
+  --blue-200: #c4dbfd;
+  --blue-100: #e5eefe;
+  --blue-50: #f2f7ff;
+
+  /* Violet tints */
+  --violet-600: #8a3fe8;
+  --violet-500: #9f4dfa;
+  --violet-100: #f0e7fe;
+  --violet-50: #f8f3ff;
+
+  /* Cyan tints */
+  --cyan-500: #1dc8fe;
+  --cyan-100: #dbf4fe;
+  --cyan-50: #eefaff;
+
+  /* Accent pop (Jebbee chartreuse) */
+  --accent-pop: #d8e557;
+
+  /* ---- Signature gradients ---- */
+  --gradient-brand: linear-gradient(120deg, #1dc8fe 0%, #2f7bf6 50%, #9f4dfa 100%);
+  --gradient-brand-soft: linear-gradient(120deg, #eefaff 0%, #f2f7ff 50%, #f8f3ff 100%);
+  --gradient-warm: linear-gradient(135deg, #4a63fe 0%, #9f4dfa 100%);
+  --gradient-mesh:
+    radial-gradient(900px 600px at 8% 4%, rgba(29, 200, 254, 0.3), transparent 60%),
+    radial-gradient(800px 600px at 95% 96%, rgba(159, 77, 250, 0.28), transparent 60%),
+    linear-gradient(120deg, #2f7bf6 0%, #4a63fe 100%);
+
+  /* ---- Cool-tinted ink ramp ---- */
+  --ink-950: #0b0e14;
+  --ink-900: #11151d;
+  --ink-700: #2b3342;
+  --ink-500: #5c6678;
+  --ink-400: #828d9f;
+  --ink-200: #d6dce5;
+  --ink-150: #e4e9f0;
+  --ink-100: #eef1f6;
+  --ink-50: #f6f8fb;
+
+  /* ---- Semantic status ---- */
+  --success-600: #16a34a;
+  --success-100: #dcfce7;
+  --warning-600: #d97706;
+  --warning-100: #fef3c7;
+  --danger-600: #dc2626;
+  --danger-500: #ef4444;
+  --danger-100: #fee2e2;
+
+  /* ---- Radii ---- */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation ---- */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-sm: 0 2px 8px rgba(16, 24, 40, 0.08);
+  --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.1);
+  --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.12);
+  --glow-brand: 0 8px 28px rgba(47, 123, 246, 0.35);
+  --ring-hairline: 0 0 0 1px rgba(16, 24, 40, 0.06);
+
+  /* ---- Semantic aliases (referenced by components + Tailwind theme) ---- */
+  --text-strong: var(--ink-900);
+  --text-body: var(--ink-700);
+  --text-muted: var(--ink-500);
+  --text-subtle: var(--ink-400);
+
+  --background: var(--ink-50);
+  --foreground: var(--ink-900);
+  --card: #ffffff;
+  --card-foreground: var(--ink-900);
+  --primary: var(--blue-500);
+  --primary-foreground: #ffffff;
+  --muted: var(--ink-100);
+  --muted-foreground: var(--ink-500);
+  --border: var(--ink-150);
+  --input: var(--ink-150);
+  --ring: rgba(47, 123, 246, 0.45);
+  --accent: var(--blue-50);
+  --accent-foreground: var(--blue-700);
+  --destructive: var(--danger-500);
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--ink-700);
+}
+
+/* ---- Motion (base styles carry the visible end-state; keyframes animate in) ---- */
+@keyframes riseSafe {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pulseDot {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.45);
+    opacity: 0.55;
+  }
+}
+@keyframes ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: 1400;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
