@@ -233,7 +233,7 @@ function SdkInteractiveSimulator() {
 
   // Código que reproduce exactamente lo que ejecuta este playground, en vivo.
   const generatedCode = `// 1) Backend: crea un link de pago y obtén el token
-const link = await fetch('http://localhost:8000/api/payment/links', {
+const link = await fetch('http://localhost:4000/api/payment/links', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
   body: JSON.stringify({
@@ -506,7 +506,7 @@ const SDK_FRAMEWORK_EXAMPLES = {
   html: {
     label: "HTML",
     code: `<!-- 1. Carga el SDK una sola vez -->
-<script src="http://localhost:7000/consi.js"></script>
+<script src="http://localhost:3000/consi.js"></script>
 
 <button id="pay">Pagar con Consi</button>
 
@@ -534,7 +534,7 @@ function useConsi() {
     if (document.getElementById('consi-sdk')) return;
     const s = document.createElement('script');
     s.id = 'consi-sdk';
-    s.src = 'http://localhost:7000/consi.js';
+    s.src = 'http://localhost:3000/consi.js';
     s.async = true;
     document.body.appendChild(s);
   }, []);
@@ -565,7 +565,7 @@ onMounted(() => {
   if (document.getElementById('consi-sdk')) return;
   const s = document.createElement('script');
   s.id = 'consi-sdk';
-  s.src = 'http://localhost:7000/consi.js';
+  s.src = 'http://localhost:3000/consi.js';
   s.async = true;
   document.body.appendChild(s);
 });
@@ -896,7 +896,7 @@ export default function DocsPage() {
   // Multi-language Snippets dictionary
   const snippets = {
     payment: {
-      curl: `curl -X POST http://localhost:8000/api/payment \\
+      curl: `curl -X POST http://localhost:4000/api/payment \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: \${keys?.apiKeyTest || 'TU_API_KEY'}" \\
   -H "x-signature: CALCULATED_HMAC_SIGNATURE" \\
@@ -917,7 +917,7 @@ const currency = 'USD';
 const payload = [apiKey, order, amount, currency].join('|');
 const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
-fetch('http://localhost:8000/api/payment', {
+fetch('http://localhost:4000/api/payment', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -959,7 +959,7 @@ body = {
     "description": "Pago de Factura #101"
 }
 
-response = requests.post("http://localhost:8000/api/payment", json=body, headers=headers)
+response = requests.post("http://localhost:4000/api/payment", json=body, headers=headers)
 print(response.json())`,
       php: `<?php
 $apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
@@ -971,7 +971,7 @@ $currency = 'USD';
 $payload = implode('|', [$apiKey, $order, $amount, $currency]);
 $signature = hash_hmac('sha256', $payload, $secret);
 
-$ch = curl_init('http://localhost:8000/api/payment');
+$ch = curl_init('http://localhost:4000/api/payment');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -992,7 +992,7 @@ echo $response;
 ?>`,
     },
     paymentLink: {
-      curl: `curl -X POST http://localhost:8000/api/payment/links \\
+      curl: `curl -X POST http://localhost:4000/api/payment/links \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: \${keys?.apiKeyTest || 'TU_API_KEY'}" \\
   -H "x-signature: CALCULATED_HMAC_SIGNATURE" \\
@@ -1014,7 +1014,7 @@ const currency = 'VES';
 const payload = [apiKey, order, amount, currency].join('|');
 const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
-fetch('http://localhost:8000/api/payment/links', {
+fetch('http://localhost:4000/api/payment/links', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -1058,7 +1058,7 @@ body = {
     "successUrl": "https://mi-tienda.com/success"
 }
 
-response = requests.post("http://localhost:8000/api/payment/links", json=body, headers=headers)
+response = requests.post("http://localhost:4000/api/payment/links", json=body, headers=headers)
 print(response.json())`,
       php: `<?php
 $apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
@@ -1070,7 +1070,7 @@ $currency = 'VES';
 $payload = implode('|', [$apiKey, $order, $amount, $currency]);
 $signature = hash_hmac('sha256', $payload, $secret);
 
-$ch = curl_init('http://localhost:8000/api/payment/links');
+$ch = curl_init('http://localhost:4000/api/payment/links');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1092,12 +1092,12 @@ echo $response;
 ?>`,
     },
     retrieve: {
-      curl: `curl -X GET http://localhost:8000/api/payment/CONSI-TRX-ABCD1234 \\
+      curl: `curl -X GET http://localhost:4000/api/payment/CONSI-TRX-ABCD1234 \\
   -H "x-api-key: \${keys?.apiKeyTest || 'TU_API_KEY'}"`,
       js: `const apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
 const reference = 'CONSI-TRX-ABCD1234';
 
-fetch(\`http://localhost:8000/api/payment/\${reference}\`, {
+fetch(\`http://localhost:4000/api/payment/\${reference}\`, {
   method: 'GET',
   headers: {
     'x-api-key': apiKey
@@ -1114,13 +1114,13 @@ headers = {
     "x-api-key": api_key
 }
 
-response = requests.get(f"http://localhost:8000/api/payment/{reference}", headers=headers)
+response = requests.get(f"http://localhost:4000/api/payment/{reference}", headers=headers)
 print(response.json())`,
       php: `<?php
 $apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
 $reference = 'CONSI-TRX-ABCD1234';
 
-$ch = curl_init("http://localhost:8000/api/payment/" . $reference);
+$ch = curl_init("http://localhost:4000/api/payment/" . $reference);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'x-api-key: ' . $apiKey
@@ -1131,12 +1131,12 @@ echo $response;
 ?>`,
     },
     retrieveOrder: {
-      curl: `curl -X GET http://localhost:8000/api/payment/order/orden_101 \\
+      curl: `curl -X GET http://localhost:4000/api/payment/order/orden_101 \\
   -H "x-api-key: \${keys?.apiKeyTest || 'TU_API_KEY'}"`,
       js: `const apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
 const orderId = 'orden_101';
 
-fetch(\`http://localhost:8000/api/payment/order/\${orderId}\`, {
+fetch(\`http://localhost:4000/api/payment/order/\${orderId}\`, {
   method: 'GET',
   headers: {
     'x-api-key': apiKey
@@ -1153,13 +1153,13 @@ headers = {
     "x-api-key": api_key
 }
 
-response = requests.get(f"http://localhost:8000/api/payment/order/{order_id}", headers=headers)
+response = requests.get(f"http://localhost:4000/api/payment/order/{order_id}", headers=headers)
 print(response.json())`,
       php: `<?php
 $apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
 $orderId = 'orden_101';
 
-$ch = curl_init("http://localhost:8000/api/payment/order/" . $orderId);
+$ch = curl_init("http://localhost:4000/api/payment/order/" . $orderId);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'x-api-key: ' . $apiKey
@@ -1170,7 +1170,7 @@ echo $response;
 ?>`,
     },
     payout: {
-      curl: `curl -X POST http://localhost:8000/api/payment/payout \\
+      curl: `curl -X POST http://localhost:4000/api/payment/payout \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: \${keys?.apiKeyTest || 'TU_API_KEY'}" \\
   -H "x-signature: CALCULATED_HMAC_SIGNATURE" \\
@@ -1192,7 +1192,7 @@ const currency = 'VES';
 const payload = [apiKey, order, amount, currency].join('|');
 const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
-fetch('http://localhost:8000/api/payment/payout', {
+fetch('http://localhost:4000/api/payment/payout', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -1238,7 +1238,7 @@ body = {
     "description": "Retiro a Pago Móvil del cliente"
 }
 
-response = requests.post("http://localhost:8000/api/payment/payout", json=body, headers=headers)
+response = requests.post("http://localhost:4000/api/payment/payout", json=body, headers=headers)
 print(response.json())`,
       php: `<?php
 $apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
@@ -1250,7 +1250,7 @@ $currency = 'VES';
 $payload = implode('|', [$apiKey, $order, $amount, $currency]);
 $signature = hash_hmac('sha256', $payload, $secret);
 
-$ch = curl_init('http://localhost:8000/api/payment/payout');
+$ch = curl_init('http://localhost:4000/api/payment/payout');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1327,7 +1327,7 @@ if (hash_equals($expected, $signature)) {
     },
     sdk: {
       curl: `<!-- Integración HTML y JS nativo -->
-<script src="http://localhost:7000/consi.js"></script>
+<script src="http://localhost:3000/consi.js"></script>
 <button id="consi-btn">Pagar con Consi</button>
 <script>
   document.getElementById('consi-btn').addEventListener('click', () => {
@@ -1344,7 +1344,7 @@ import { useEffect } from 'react';
 export function CheckoutButton({ token }) {
   useEffect(() => {
     const script = document.createElement('script');
-    script.src = 'http://localhost:7000/consi.js';
+    script.src = 'http://localhost:3000/consi.js';
     script.async = true;
     document.body.appendChild(script);
   }, []);
@@ -1365,13 +1365,13 @@ import requests
 api_key = "TU_API_KEY"
 headers = { "x-api-key": api_key, "Content-Type": "application/json" }
 payload = { "amount": "100.00", "currency": "USD", "methods": ["CARD", "PAGO_MOVIL"] }
-res = requests.post("http://localhost:8000/api/payment/links", json=payload, headers=headers)
+res = requests.post("http://localhost:4000/api/payment/links", json=payload, headers=headers)
 token = res.json()["data"]["token"]
 # Pasa este 'token' a tu frontend para usarlo con Consi.checkout({ token })`,
       php: `<?php
 // Backend PHP
 // Crea el link de pago y retorna el token al frontend
-$ch = curl_init('http://localhost:8000/api/payment/links');
+$ch = curl_init('http://localhost:4000/api/payment/links');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -1413,7 +1413,7 @@ $token = $res['data']['token'];
   "success": true,
   "data": {
     "token": "link_xyz123",
-    "url": "http://localhost:7000/c/link_xyz123",
+    "url": "http://localhost:3000/c/link_xyz123",
     "amount": "250.00",
     "currency": "VES",
     "description": "Enlace para suscripción mensual",
@@ -2085,7 +2085,7 @@ if (res.token) {
                     </p>
                     <CodeBlock
                       code={
-                        '<script src="http://localhost:7000/consi.js"></script>'
+                        '<script src="http://localhost:3000/consi.js"></script>'
                       }
                       language="markup"
                       maxHeight={120}
@@ -2342,10 +2342,10 @@ if (res.token) {
                   Base URL
                 </span>
                 <code className="font-mono text-xs font-semibold text-[var(--blue-700)] flex-1">
-                  http://localhost:8000/api
+                  http://localhost:4000/api
                 </code>
                 <CopyButton
-                  value="http://localhost:8000/api"
+                  value="http://localhost:4000/api"
                   label="Base URL"
                 />
               </div>
@@ -2873,7 +2873,7 @@ if (res.token) {
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-mono whitespace-nowrap">
-                      8000 0000 0000 0002
+                      4000 0000 0000 0002
                     </TableCell>
                     <TableCell className="font-mono">12/29</TableCell>
                     <TableCell className="font-mono">123</TableCell>
@@ -2883,7 +2883,7 @@ if (res.token) {
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-mono whitespace-nowrap">
-                      8000 0000 0000 9995
+                      4000 0000 0000 9995
                     </TableCell>
                     <TableCell className="font-mono">12/29</TableCell>
                     <TableCell className="font-mono">123</TableCell>
