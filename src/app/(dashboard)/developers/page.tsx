@@ -1,6 +1,6 @@
 'use client';
 
-import { Copy, Eye, EyeOff, RefreshCw, BookOpen, Key, Terminal, Shield, Sparkles, Smartphone, CreditCard, HelpCircle, Code2, Link2, Check, ArrowRight } from 'lucide-react';
+import { Copy, Eye, EyeOff, RefreshCw, BookOpen, Key, Terminal, Shield, Sparkles, Smartphone, CreditCard, HelpCircle, Code2, Link2, Check, ArrowRight, Banknote } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -173,7 +173,7 @@ export default function DevelopersPage() {
   const [mainTab, setMainTab] = useState<'keys' | 'docs'>('keys');
 
   // Documentation states
-  const [docSection, setDocSection] = useState<'intro' | 'auth' | 'hmac' | 'checkout' | 'endpoints' | 'webhooks' | 'testing'>('intro');
+  const [docSection, setDocSection] = useState<'intro' | 'auth' | 'hmac' | 'checkout' | 'endpoints' | 'payouts' | 'webhooks' | 'testing'>('intro');
   const [codeLang, setCodeLang] = useState<'curl' | 'js' | 'python' | 'php'>('curl');
 
   const load = () =>
@@ -529,6 +529,108 @@ if (hash_equals($expected, $signature)) {
     echo "Firma inválida";
 }
 ?>`
+    },
+    payout: {
+      curl: `curl -X POST http://localhost:4000/api/payment/payout \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: \${keys?.apiKeyTest || 'TU_API_KEY'}" \\
+  -H "x-signature: CALCULATED_HMAC_SIGNATURE" \\
+  -d '{
+    "amount": "100.00",
+    "currency": "USD",
+    "bankAccountId": "id_de_la_cuenta_bancaria",
+    "payoutMode": "INSTANT",
+    "description": "Retiro de fondos automatizado",
+    "order": "retiro_123"
+  }'`,
+      js: `const crypto = require('crypto');
+const apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
+const secret = '\${keys?.apiSecretTest || 'TU_API_SECRET'}';
+const amount = '100.00';
+const currency = 'USD';
+const order = 'retiro_123';
+
+const payload = [apiKey, order, amount, currency].join('|');
+const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+
+fetch('http://localhost:4000/api/payment/payout', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'x-signature': signature
+  },
+  body: JSON.stringify({
+    amount,
+    currency,
+    bankAccountId: 'id_de_la_cuenta_bancaria',
+    payoutMode: 'INSTANT',
+    description: 'Retiro de fondos automatizado',
+    order
+  })
+})
+.then(res => res.json())
+.then(console.log);`,
+      python: `import hmac
+import hashlib
+import requests
+
+api_key = "\${keys?.apiKeyTest || 'TU_API_KEY'}"
+secret = "\${keys?.apiSecretTest || 'TU_API_SECRET'}"
+amount = "100.00"
+currency = "USD"
+order = "retiro_123"
+
+payload = f"{api_key}|{order}|{amount}|{currency}".encode('utf-8')
+signature = hmac.new(secret.encode('utf-8'), payload, hashlib.sha256).hexdigest()
+
+headers = {
+    "Content-Type": "application/json",
+    "x-api-key": api_key,
+    "x-signature": signature
+}
+
+body = {
+    "amount": amount,
+    "currency": currency,
+    "bankAccountId": "id_de_la_cuenta_bancaria",
+    "payoutMode": "INSTANT",
+    "description": "Retiro de fondos automatizado",
+    "order": order
+}
+
+response = requests.post("http://localhost:4000/api/payment/payout", json=body, headers=headers)
+print(response.json())`,
+      php: `<?php
+$apiKey = '\${keys?.apiKeyTest || 'TU_API_KEY'}';
+$secret = '\${keys?.apiSecretTest || 'TU_API_SECRET'}';
+$amount = '100.00';
+$currency = 'USD';
+$order = 'retiro_123';
+
+$payload = implode('|', [$apiKey, $order, $amount, $currency]);
+$signature = hash_hmac('sha256', $payload, $secret);
+
+$ch = curl_init('http://localhost:4000/api/payment/payout');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Content-Type: application/json',
+    'x-api-key: ' . $apiKey,
+    'x-signature: ' . $signature
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+    'amount' => $amount,
+    'currency' => $currency,
+    'bankAccountId' => 'id_de_la_cuenta_bancaria',
+    'payoutMode' => 'INSTANT',
+    'description' => 'Retiro de fondos automatizado',
+    'order' => $order
+]));
+
+$response = curl_exec($ch);
+echo $response;
+?>`
     }
   };
 
@@ -612,6 +714,22 @@ if (hash_equals($expected, $signature)) {
   "net": "146.50",
   "providerRef": "BCM-PI-ABCD1234",
   "createdAt": "2026-06-16T18:30:00.000Z"
+}`
+    },
+    payout: {
+      req: snippets.payout[codeLang],
+      res: `{
+  "success": true,
+  "data": {
+    "reference": "CONSI-TRX-POUT5678",
+    "order": "retiro_123",
+    "status": "COMPLETED",
+    "currency": "USD",
+    "amount": "100.00",
+    "fee": "0.50",
+    "net": "99.50",
+    "createdAt": "2026-06-16T19:00:00.000Z"
+  }
 }`
     }
   };
@@ -831,6 +949,14 @@ if (hash_equals($expected, $signature)) {
               <Code2 size={14} /> Endpoints Públicos
             </button>
             <button
+              onClick={() => setDocSection('payouts')}
+              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
+                docSection === 'payouts' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
+              }`}
+            >
+              <Banknote size={14} /> Retiros (Payouts)
+            </button>
+            <button
               onClick={() => setDocSection('webhooks')}
               className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
                 docSection === 'webhooks' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
@@ -986,6 +1112,36 @@ if (hash_equals($expected, $signature)) {
                 </div>
               </div>
             )}
+            
+            {/* SECTION: PAYOUTS */}
+            {docSection === 'payouts' && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-bold text-[var(--text-strong)]">Retiros y Payouts programáticos</h2>
+                <p>
+                  Consi permite a los comercios automatizar el retiro de fondos hacia cuentas bancarias aprobadas utilizando nuestro endpoint público de retiros.
+                </p>
+                <div className="p-3 border border-[var(--border)] rounded-lg bg-[var(--ink-50)] space-y-1">
+                  <span className="font-bold text-[var(--text-strong)] block text-xs">POST /payment/payout</span>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Genera una orden de retiro desde el saldo de tu comercio hacia la cuenta bancaria especificada.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-bold text-[var(--text-strong)]">Parámetros del cuerpo (JSON):</h3>
+                  <ul className="list-disc pl-5 text-xs space-y-1">
+                    <li><strong>amount:</strong> Cadena que representa el monto del retiro (ej. <code className="bg-slate-100 px-1 rounded">"100.00"</code>).</li>
+                    <li><strong>currency:</strong> Moneda del retiro, debe coincidir con la de la cuenta destino (<code className="bg-slate-100 px-1 rounded">"USD"</code> o <code className="bg-slate-100 px-1 rounded">"VES"</code>).</li>
+                    <li><strong>bankAccountId:</strong> El identificador único de la cuenta bancaria de destino (debe estar en estado <em>APPROVED</em>).</li>
+                    <li><strong>payoutMode:</strong> (Opcional) Puede ser <code className="bg-slate-100 px-1 rounded">"INSTANT"</code> (procesamiento inmediato) o <code className="bg-slate-100 px-1 rounded">"MANUAL"</code> (requiere aprobación administrativa).</li>
+                    <li><strong>order:</strong> (Opcional) Identificador único de orden de tu sistema para control de duplicados y firma HMAC.</li>
+                    <li><strong>description:</strong> (Opcional) Nota aclaratoria del retiro.</li>
+                  </ul>
+                </div>
+                <div className="p-3 bg-[var(--blue-50)] border border-[var(--blue-200)] text-[var(--blue-700)] rounded-lg text-xs font-semibold">
+                  ℹ️ Recuerda que este endpoint requiere firma HMAC-SHA256 en la cabecera <strong>x-signature</strong> calculada con la fórmula <code className="bg-white/80 px-1 rounded">apiKey|order|amount|currency</code>. Si el retiro no incluye order, utiliza un valor vacío en su lugar: <code className="bg-white/80 px-1 rounded">apiKey||amount|currency</code>.
+                </div>
+              </div>
+            )}
 
             {/* SECTION: WEBHOOKS */}
             {docSection === 'webhooks' && (
@@ -1080,6 +1236,8 @@ if (hash_equals($expected, $signature)) {
                     ? codeBlocks.payment.req
                     : docSection === 'endpoints'
                     ? codeBlocks.payment.req
+                    : docSection === 'payouts'
+                    ? codeBlocks.payout.req
                     : docSection === 'webhooks'
                     ? codeBlocks.webhooks.req
                     : codeBlocks.payment.req
@@ -1113,6 +1271,8 @@ if (hash_equals($expected, $signature)) {
                     ? codeBlocks.payment.res
                     : docSection === 'endpoints'
                     ? codeBlocks.payment.res
+                    : docSection === 'payouts'
+                    ? codeBlocks.payout.res
                     : docSection === 'webhooks'
                     ? codeBlocks.webhooks.res
                     : codeBlocks.payment.res

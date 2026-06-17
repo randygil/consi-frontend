@@ -17,13 +17,13 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/', label: 'Panel', icon: LayoutDashboard },
   { href: '/links', label: 'Links de pago', icon: Link2 },
-  { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight },
+  { href: '/transactions', label: 'Cobros', icon: ArrowLeftRight },
   { href: '/payouts', label: 'Retiros', icon: Banknote },
   { href: '/settlements', label: 'Liquidaciones', icon: Wallet },
   { href: '/developers', label: 'Desarrolladores', icon: Code2 },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname();
   const [rate, setRate] = useState<string | null>(null);
 
@@ -35,7 +35,7 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="flex w-[236px] shrink-0 flex-col gap-6 border-r border-[var(--border)] bg-[var(--sidebar)] p-4">
+    <aside className="flex h-full w-[236px] shrink-0 flex-col gap-6 border-r border-[var(--border)] bg-[var(--sidebar)] p-4">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-2 pt-2">
         <span
@@ -54,6 +54,7 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={onLinkClick}
               className={cn(
                 'relative flex items-center gap-3 rounded-[var(--radius-md)] px-3.5 py-2.5 text-sm transition-all duration-200',
                 active
@@ -87,3 +88,4 @@ export function Sidebar() {
     </aside>
   );
 }
+

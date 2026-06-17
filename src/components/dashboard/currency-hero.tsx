@@ -24,7 +24,7 @@ export function CurrencyHero({
 
   return (
     <section
-      className="relative flex items-stretch gap-4 overflow-hidden rounded-[var(--radius-xl)] p-6 text-white sm:gap-6 sm:p-7"
+      className="relative flex flex-col sm:flex-row items-stretch gap-6 sm:gap-6 overflow-hidden rounded-[var(--radius-xl)] p-6 text-white sm:p-7"
       style={{
         background: 'var(--gradient-mesh)',
         boxShadow: 'var(--glow-brand)',
@@ -43,16 +43,16 @@ export function CurrencyHero({
       </div>
 
       {/* Swap node + live rate */}
-      <div className="flex flex-none flex-col items-center justify-center gap-2 px-1 sm:px-2">
+      <div className="flex flex-row sm:flex-col flex-none items-center justify-between sm:justify-center gap-3 border-t border-b border-white/10 py-3 sm:py-0 sm:border-0 px-1 sm:px-2">
         <div
-          className="flex size-14 items-center justify-center rounded-full"
+          className="flex size-10 sm:size-14 items-center justify-center rounded-full shrink-0"
           style={{ background: 'var(--gradient-brand)', boxShadow: 'var(--glow-brand)' }}
         >
-          <ArrowLeftRight size={24} strokeWidth={2} />
+          <ArrowLeftRight className="size-5 sm:size-6" strokeWidth={2} />
         </div>
-        <div className="text-center">
+        <div className="text-right sm:text-center">
           <div className="font-mono text-base font-semibold leading-tight">{rateLabel}</div>
-          <div className="flex items-center justify-center gap-1.5 text-[10px] tracking-[0.04em] text-white/55">
+          <div className="flex items-center justify-end sm:justify-center gap-1.5 text-[10px] tracking-[0.04em] text-white/55">
             <span className="relative inline-flex size-2">
               <span
                 className="absolute inset-0 rounded-full"
@@ -65,7 +65,7 @@ export function CurrencyHero({
       </div>
 
       {/* Saldo VES */}
-      <div className="flex flex-1 flex-col items-end justify-center text-right">
+      <div className="flex flex-1 flex-col items-start sm:items-end justify-center text-left sm:text-right">
         <div className="mb-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-white/60">
           Saldo VES
         </div>
@@ -79,3 +79,4 @@ export function CurrencyHero({
     </section>
   );
 }
+
