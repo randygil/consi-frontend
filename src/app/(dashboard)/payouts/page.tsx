@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { FileSpreadsheet, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { StatusBadge } from '@/components/ui/badge';
 import { api } from '@/lib/api-client';
 import { formatMoney, formatDate } from '@/lib/format';
+import { exportPayoutsToExcel, exportPayoutsToPdf } from '@/lib/export';
 import { GATEWAYS, type BankAccount, type Currency, type Gateway, type Wallet, type Transaction } from '@/lib/types';
 
 export default function PayoutsPage() {
@@ -18,6 +20,42 @@ export default function PayoutsPage() {
   const [payoutsList, setPayoutsList] = useState<Transaction[]>([]);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCurrency, setFilterCurrency] = useState('');
+
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    setExportError(null);
+    try {
+      const params: Record<string, string> = { type: 'PAYOUT', take: '5000' };
+      if (filterStatus) params.status = filterStatus;
+      if (filterCurrency) params.currency = filterCurrency;
+      const data = await api.getTransactions(params);
+      exportPayoutsToExcel(data);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Error al exportar a Excel');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    setExportError(null);
+    try {
+      const params: Record<string, string> = { type: 'PAYOUT', take: '5000' };
+      if (filterStatus) params.status = filterStatus;
+      if (filterCurrency) params.currency = filterCurrency;
+      const data = await api.getTransactions(params);
+      exportPayoutsToPdf(data);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Error al exportar a PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
   
   // Solicitar Retiro Form State
   const [bankAccountId, setBankAccountId] = useState('');
@@ -384,9 +422,9 @@ export default function PayoutsPage() {
 
       {/* HISTORICAL PAYOUTS TABLE CARD */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <CardTitle className="text-base font-semibold text-[var(--foreground)]">Historial de retiros</CardTitle>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-[140px] text-xs">
               <option value="">Todos los estados</option>
               <option value="PENDING">Pendiente</option>
@@ -398,8 +436,29 @@ export default function PayoutsPage() {
               <option value="USD">USD</option>
               <option value="VES">VES</option>
             </Select>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportExcel}
+              disabled={exportingExcel || payoutsList.length === 0}
+              className="gap-2 cursor-pointer text-xs font-semibold"
+            >
+              <FileSpreadsheet size={14} className="text-green-600" />
+              {exportingExcel ? 'Exportando…' : 'Exportar Excel'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportPdf}
+              disabled={exportingPdf || payoutsList.length === 0}
+              className="gap-2 cursor-pointer text-xs font-semibold"
+            >
+              <FileText size={14} className="text-red-500" />
+              {exportingPdf ? 'Exportando…' : 'Exportar PDF'}
+            </Button>
           </div>
         </CardHeader>
+        {exportError ? <p className="text-sm text-[var(--destructive)] px-6 pb-2">{exportError}</p> : null}
         <CardContent>
           <Table>
             <TableHeader>

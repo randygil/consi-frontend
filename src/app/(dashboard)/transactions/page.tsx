@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { FileSpreadsheet, FileText } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,12 +11,52 @@ import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
+import { exportTransactionsToExcel, exportTransactionsToPdf } from '@/lib/export';
 import type { Transaction } from '@/lib/types';
 
 export default function TransactionsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({ status: '', currency: '', from: '', to: '' });
+
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    setError(null);
+    try {
+      const params: Record<string, string> = { type: 'PAYIN', take: '5000' };
+      if (filters.status) params.status = filters.status;
+      if (filters.currency) params.currency = filters.currency;
+      if (filters.from) params.from = new Date(filters.from).toISOString();
+      if (filters.to) params.to = new Date(filters.to).toISOString();
+      const data = await api.getTransactions(params);
+      exportTransactionsToExcel(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al exportar a Excel');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    setError(null);
+    try {
+      const params: Record<string, string> = { type: 'PAYIN', take: '5000' };
+      if (filters.status) params.status = filters.status;
+      if (filters.currency) params.currency = filters.currency;
+      if (filters.from) params.from = new Date(filters.from).toISOString();
+      if (filters.to) params.to = new Date(filters.to).toISOString();
+      const data = await api.getTransactions(params);
+      exportTransactionsToPdf(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al exportar a PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const [refundingTx, setRefundingTx] = useState<Transaction | null>(null);
   const [customRefundAmount, setCustomRefundAmount] = useState<string>('');
@@ -60,7 +101,31 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Transacciones</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h1 className="text-2xl font-bold tracking-tight">Transacciones</h1>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={exportingExcel || rows.length === 0}
+            className="gap-2 cursor-pointer text-xs font-semibold"
+          >
+            <FileSpreadsheet size={14} className="text-green-600" />
+            {exportingExcel ? 'Exportando…' : 'Exportar Excel'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportPdf}
+            disabled={exportingPdf || rows.length === 0}
+            className="gap-2 cursor-pointer text-xs font-semibold"
+          >
+            <FileText size={14} className="text-red-500" />
+            {exportingPdf ? 'Exportando…' : 'Exportar PDF'}
+          </Button>
+        </div>
+      </div>
 
       <Card>
         <CardHeader><CardTitle className="text-base font-semibold text-[var(--foreground)]">Filtros</CardTitle></CardHeader>
