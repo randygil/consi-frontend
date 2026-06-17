@@ -57,6 +57,11 @@ export const api = {
     }),
 
   getProfile: () => request<MerchantProfile>('/merchant/me'),
+  updateSettings: (input: { autoSettle: boolean; payoutMode: 'INSTANT' | 'MANUAL' }) =>
+    request<{ autoSettle: boolean; payoutMode: 'INSTANT' | 'MANUAL' }>('/merchant/settings', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
   getBalances: () => request<Wallet[]>('/merchant/balances'),
   getApiKeys: () => request<ApiKeys>('/merchant/api-keys'),
   regenerateApiKey: (environment: Environment) =>
@@ -70,6 +75,21 @@ export const api = {
       body: JSON.stringify({ webhookUrl }),
     }),
   getBankAccounts: () => request<BankAccount[]>('/merchant/bank-accounts'),
+  addBankAccount: (input: {
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    currency: Currency;
+    isDefault?: boolean;
+  }) =>
+    request<BankAccount>('/merchant/bank-accounts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  setDefaultBankAccount: (id: string) =>
+    request<{ success: boolean }>(`/merchant/bank-accounts/${id}/default`, {
+      method: 'POST',
+    }),
   getWebhookDeliveries: () =>
     request<WebhookDelivery[]>('/merchant/webhook-deliveries'),
 
@@ -139,4 +159,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  adminGetPendingBankAccounts: () =>
+    request<(BankAccount & { merchant: { businessName: string } })[]>('/admin/bank-accounts/pending'),
+  adminGetPendingPayouts: () =>
+    request<(Transaction & { merchant: { businessName: string }; bankAccount: BankAccount })[]>('/admin/transactions/pending-payouts'),
+  adminApproveBankAccount: (id: string) =>
+    request<any>(`/admin/bank-accounts/${id}/approve`, { method: 'POST' }),
+  adminRejectBankAccount: (id: string) =>
+    request<any>(`/admin/bank-accounts/${id}/reject`, { method: 'POST' }),
+  adminApprovePayout: (id: string) =>
+    request<any>(`/admin/transactions/${id}/approve-payout`, { method: 'POST' }),
+  adminRejectPayout: (id: string) =>
+    request<any>(`/admin/transactions/${id}/reject-payout`, { method: 'POST' }),
 };

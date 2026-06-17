@@ -71,6 +71,8 @@ export interface MerchantProfile {
   businessName: string;
   environment: Environment;
   webhookUrl: string | null;
+  autoSettle: boolean;
+  payoutMode: 'INSTANT' | 'MANUAL';
 }
 
 export interface ApiKeys {
@@ -100,6 +102,8 @@ export interface BankAccount {
   accountNumber: string;
   accountHolder: string;
   currency: Currency;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  isDefault: boolean;
 }
 
 export interface ExchangeRate {
