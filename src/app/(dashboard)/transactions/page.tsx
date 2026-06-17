@@ -200,28 +200,7 @@ export default function TransactionsPage() {
                   <TableCell className="text-[var(--muted-foreground)]">{formatDate(t.createdAt)}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      {t.status === 'PENDING' ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busyId === t.id}
-                            onClick={() => runAction(t.id, api.confirmTransaction)}
-                          >
-                            Confirmar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={busyId === t.id}
-                            onClick={() =>
-                              runAction(t.id, api.rejectTransaction, '¿Rechazar esta transacción?')
-                            }
-                          >
-                            Rechazar
-                          </Button>
-                        </>
-                      ) : null}
+                      {/* Pagos pendientes los liquida la pasarela/webhook, no el comercio. */}
                       {t.status === 'AUTHORIZED' ? (
                         <>
                           <Button

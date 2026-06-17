@@ -12,7 +12,7 @@ import { StatusBadge } from '@/components/ui/badge';
 import { api } from '@/lib/api-client';
 import { formatMoney, formatDate } from '@/lib/format';
 import { exportPayoutsToExcel, exportPayoutsToPdf } from '@/lib/export';
-import { GATEWAYS, type BankAccount, type Currency, type Gateway, type Wallet, type Transaction } from '@/lib/types';
+import { type BankAccount, type Currency, type Wallet, type Transaction } from '@/lib/types';
 
 export default function PayoutsPage() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
@@ -60,8 +60,6 @@ export default function PayoutsPage() {
   // Solicitar Retiro Form State
   const [bankAccountId, setBankAccountId] = useState('');
   const [amount, setAmount] = useState('');
-  const [gateway, setGateway] = useState<Gateway | ''>('');
-  const [payoutMode, setPayoutMode] = useState<'INSTANT' | 'MANUAL'>('INSTANT');
   const [description, setDescription] = useState('');
   const [payoutMessage, setPayoutMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [payoutLoading, setPayoutLoading] = useState(false);
@@ -126,14 +124,12 @@ export default function PayoutsPage() {
         currency,
         amount,
         bankAccountId,
-        gateway: gateway || undefined,
         description: description || undefined,
-        payoutMode: payoutMode,
       } as any);
-      
+
       setPayoutMessage({
         kind: 'ok',
-        text: `Retiro creado (${trx.reference.slice(0, 12)}…) — Estado: ${trx.status}${payoutMode === 'MANUAL' ? ' (Pendiente de aprobación admin)' : ''}`,
+        text: `Retiro creado (${trx.reference.slice(0, 12)}…) — Estado: ${trx.status}${trx.status === 'PENDING' ? ' (Pendiente de aprobación)' : ''}`,
       });
       setAmount('');
       setDescription('');
@@ -227,27 +223,6 @@ export default function PayoutsPage() {
                     ) : null}
                   </div>
                   
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>Modo de Retiro</Label>
-                      <Select value={payoutMode} onChange={(e) => setPayoutMode(e.target.value as 'INSTANT' | 'MANUAL')}>
-                        <option value="INSTANT">Instantáneo (Inmediato)</option>
-                        <option value="MANUAL">Manual (Aprobación Admin)</option>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Pasarela (Gateway)</Label>
-                      <Select value={gateway} onChange={(e) => setGateway(e.target.value as Gateway | '')}>
-                        <option value="">Por defecto de Consi</option>
-                        {GATEWAYS.map((g) => (
-                          <option key={g} value={g}>
-                            {g}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                  </div>
-
                   <div className="space-y-1.5">
                     <Label>Descripción (opcional)</Label>
                     <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ej. Retiro de caja chica" />

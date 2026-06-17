@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Transaction, MerchantProfile } from '@/lib/types';
@@ -17,7 +16,6 @@ export default function SettlementsPage() {
 
   // Settings state
   const [autoSettle, setAutoSettle] = useState(false);
-  const [payoutMode, setPayoutMode] = useState<'INSTANT' | 'MANUAL'>('INSTANT');
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -33,7 +31,6 @@ export default function SettlementsPage() {
       .getProfile()
       .then((p) => {
         setAutoSettle(p.autoSettle);
-        setPayoutMode(p.payoutMode);
       })
       .catch((e) => console.error('Failed to load merchant settings', e));
   }, []);
@@ -62,7 +59,7 @@ export default function SettlementsPage() {
     setSettingsSaving(true);
     setSettingsMessage(null);
     try {
-      await api.updateSettings({ autoSettle, payoutMode });
+      await api.updateSettings({ autoSettle });
       setSettingsMessage({ kind: 'ok', text: 'Configuración guardada correctamente.' });
       setTimeout(() => setSettingsMessage(null), 3000);
     } catch (err) {
@@ -160,17 +157,6 @@ export default function SettlementsPage() {
                       Transfiere automáticamente el saldo disponible a tu cuenta bancaria principal cada vez que se liberen fondos.
                     </p>
                   </div>
-                </div>
-
-                <div className="space-y-1.5 pt-2">
-                  <label className="text-sm font-medium text-[var(--foreground)]">Modo de retiro por defecto</label>
-                  <Select value={payoutMode} onChange={(e) => setPayoutMode(e.target.value as 'INSTANT' | 'MANUAL')}>
-                    <option value="INSTANT">Instantáneo (Inmediato)</option>
-                    <option value="MANUAL">Manual (Requiere aprobación del administrador)</option>
-                  </Select>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    Establece si las dispersiones y retiros solicitados se envían inmediatamente al banco o quedan retenidos para aprobación.
-                  </p>
                 </div>
 
                 {settingsMessage ? (

@@ -12,9 +12,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Admins belong in the admin dashboard, not the merchant one.
+    // Admins and operations users belong in their own panels, not the merchant one.
     if (!loading && user?.role === 'ADMIN') {
       router.replace('/admin');
+    } else if (!loading && user?.role === 'OPERATIONS') {
+      router.replace('/ops');
     }
   }, [loading, user, router]);
 

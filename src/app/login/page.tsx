@@ -24,7 +24,7 @@ export default function LoginPage() {
       const { accessToken, user } = await api.login(email, password);
       setToken(accessToken);
       setStoredUser(user);
-      router.push(user.role === 'ADMIN' ? '/admin' : '/');
+      router.push(user.role === 'ADMIN' ? '/admin' : user.role === 'OPERATIONS' ? '/ops' : '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

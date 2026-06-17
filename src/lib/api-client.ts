@@ -9,12 +9,15 @@ import type {
   AuthUser,
   BankAccount,
   Currency,
+  AccountMovement,
+  AdminGateway,
+  ConsiAccount,
   Dispute,
   Environment,
   ExchangeRate,
-  Gateway,
   MerchantProfile,
   OnboardMerchantInput,
+  OpsNotification,
   PaymentLinkSummary,
   PaymentMethod,
   PlatformStats,
@@ -58,8 +61,8 @@ export const api = {
     }),
 
   getProfile: () => request<MerchantProfile>('/merchant/me'),
-  updateSettings: (input: { autoSettle: boolean; payoutMode: 'INSTANT' | 'MANUAL' }) =>
-    request<{ autoSettle: boolean; payoutMode: 'INSTANT' | 'MANUAL' }>('/merchant/settings', {
+  updateSettings: (input: { autoSettle: boolean }) =>
+    request<{ autoSettle: boolean }>('/merchant/settings', {
       method: 'PUT',
       body: JSON.stringify(input),
     }),
@@ -101,7 +104,6 @@ export const api = {
   createPayin: (input: {
     currency: Currency;
     amount: string;
-    gateway?: Gateway;
     customerName?: string;
     description?: string;
   }) =>
@@ -112,18 +114,14 @@ export const api = {
   createPayout: (input: {
     currency: Currency;
     amount: string;
-    bankAccountId: string;
-    gateway?: Gateway;
+    bankAccountId?: string;
+    destination?: Record<string, string>;
     description?: string;
   }) =>
     request<Transaction>('/transactions/payout', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  confirmTransaction: (id: string) =>
-    request<Transaction>(`/transactions/${id}/confirm`, { method: 'POST' }),
-  rejectTransaction: (id: string) =>
-    request<Transaction>(`/transactions/${id}/reject`, { method: 'POST' }),
   refundTransaction: (id: string, amount?: string) =>
     request<Transaction>(`/transactions/${id}/refund`, {
       method: 'POST',
@@ -180,6 +178,65 @@ export const api = {
   adminRejectPayout: (id: string) =>
     request<any>(`/admin/transactions/${id}/reject-payout`, { method: 'POST' }),
 
+  // ---- Admin: gateways (pasarelas) ----
+  adminGetGateways: () => request<AdminGateway[]>('/admin/gateways'),
+  adminCreateGateway: (input: Partial<AdminGateway>) =>
+    request<AdminGateway>('/admin/gateways', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  adminUpdateGateway: (id: string, input: Partial<AdminGateway>) =>
+    request<AdminGateway>(`/admin/gateways/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  adminSetMerchantGateways: (
+    merchantId: string,
+    gateways: Array<{
+      gatewayId: string;
+      enabled: boolean;
+      priority: number;
+      percentageRate?: string | null;
+      fixedFee?: string | null;
+      minFee?: string | null;
+      maxFee?: string | null;
+      taxRate?: string | null;
+    }>,
+  ) =>
+    request<AdminMerchantDetail>(`/admin/merchants/${merchantId}/gateways`, {
+      method: 'PUT',
+      body: JSON.stringify({ gateways }),
+    }),
+
+  // ---- Operations: Consi liquidity accounts ----
+  opsGetAccounts: () => request<ConsiAccount[]>('/ops/accounts'),
+  opsCreateAccount: (input: {
+    label: string;
+    currency: Currency;
+    environment?: Environment;
+    balance?: string;
+    minBalance?: string;
+  }) =>
+    request<ConsiAccount>('/ops/accounts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  opsFundAccount: (id: string, amount: string, note?: string) =>
+    request<ConsiAccount>(`/ops/accounts/${id}/fund`, {
+      method: 'POST',
+      body: JSON.stringify({ amount, note }),
+    }),
+  opsAdjustAccount: (id: string, amount: string, note?: string) =>
+    request<ConsiAccount>(`/ops/accounts/${id}/adjust`, {
+      method: 'POST',
+      body: JSON.stringify({ amount, note }),
+    }),
+  opsGetMovements: (id: string) =>
+    request<AccountMovement[]>(`/ops/accounts/${id}/movements`),
+  opsGetNotifications: (includeResolved = false) =>
+    request<OpsNotification[]>(`/ops/notifications?includeResolved=${includeResolved}`),
+  opsResolveNotification: (id: string) =>
+    request<OpsNotification>(`/ops/notifications/${id}/resolve`, { method: 'POST' }),
 
   // ---- Disputes ----
   getDisputes: () => request<Dispute[]>('/disputes'),
