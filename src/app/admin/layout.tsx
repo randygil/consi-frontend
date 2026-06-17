@@ -56,8 +56,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Non-admins (merchant users) don't belong here.
-    if (!loading && user && user.role !== 'ADMIN') {
+    // Non-admins and non-operators (merchant users) don't belong here.
+    if (!loading && user && user.role !== 'ADMIN' && user.role !== 'OPERATOR') {
       router.replace('/');
     }
   }, [loading, user, router]);
@@ -69,7 +69,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (!user || user.role !== 'ADMIN') return null; // redirecting
+  if (!user || (user.role !== 'ADMIN' && user.role !== 'OPERATOR')) return null; // redirecting
 
   return (
     <div className="flex min-h-screen bg-[var(--background)]">

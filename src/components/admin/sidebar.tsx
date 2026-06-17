@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Store, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Store, UserPlus, Coins, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: '/admin', label: 'Panel', icon: LayoutDashboard },
   { href: '/admin/merchants', label: 'Comercios', icon: Store },
   { href: '/admin/merchants/new', label: 'Onboarding', icon: UserPlus },
+  { href: '/admin/gateways', label: 'Pasarelas', icon: Coins },
+  { href: '/admin/alerts', label: 'Alertas', icon: AlertTriangle },
 ];
 
 export function AdminSidebar({ onLinkClick }: { onLinkClick?: () => void }) {

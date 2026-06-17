@@ -13,11 +13,14 @@ import type {
   Environment,
   ExchangeRate,
   Gateway,
+  GatewayAccount,
+  MerchantGatewayConfig,
   MerchantProfile,
   OnboardMerchantInput,
   PaymentLinkSummary,
   PaymentMethod,
   PlatformStats,
+  SystemAlert,
   Transaction,
   Wallet,
   WebhookDelivery,
@@ -208,4 +211,35 @@ export const api = {
     }
     return body.data as Dispute;
   },
+
+  // ---- Gateway Accounts (Consi Accounts) ----
+  getGatewayAccounts: () => request<GatewayAccount[]>('/admin/gateway-accounts'),
+  getGatewayAccount: (id: string) => request<GatewayAccount>(`/admin/gateway-accounts/${id}`),
+  createGatewayAccount: (input: Partial<GatewayAccount>) =>
+    request<GatewayAccount>('/admin/gateway-accounts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateGatewayAccount: (id: string, input: Partial<GatewayAccount>) =>
+    request<GatewayAccount>(`/admin/gateway-accounts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  fundGatewayAccount: (id: string, amount: string) =>
+    request<GatewayAccount>(`/admin/gateway-accounts/${id}/fund`, {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
+
+  // ---- System Alerts ----
+  getAlerts: () => request<SystemAlert[]>('/admin/alerts'),
+  resolveAlert: (id: string) => request<SystemAlert>(`/admin/alerts/${id}/resolve`, { method: 'POST' }),
+
+  // ---- Merchant Gateways ----
+  getMerchantGateways: (id: string) => request<MerchantGatewayConfig[]>(`/admin/merchants/${id}/gateways`),
+  toggleMerchantGateway: (id: string, gateway: string, enabled: boolean) =>
+    request<MerchantGatewayConfig>(`/admin/merchants/${id}/gateways/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ gateway, enabled }),
+    }),
 };

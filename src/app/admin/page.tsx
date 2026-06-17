@@ -243,8 +243,16 @@ export default function AdminDashboardPage() {
                           <div className="text-[11px] text-[var(--text-muted)] pt-0.5">
                             <span className="font-semibold">{p.bankAccount.bankName}</span> · {p.bankAccount.accountNumber.slice(-4)}
                           </div>
+                        ) : p.destinationAccountNumber ? (
+                          <div className="text-[11px] text-[var(--text-muted)] pt-0.5">
+                            <span className="font-semibold">{p.destinationBankName || 'Crypto/Otros'}</span> · {p.destinationAccountNumber.slice(-4)}
+                          </div>
+                        ) : p.destinationCryptoAddress ? (
+                          <div className="text-[11px] text-[var(--text-muted)] pt-0.5">
+                            <span className="font-semibold">Crypto (USDT)</span> · {p.destinationCryptoAddress.slice(-6)}
+                          </div>
                         ) : (
-                          <span className="text-xs text-red-500">Sin cuenta bancaria</span>
+                          <span className="text-xs text-red-500">Sin detalles de destino</span>
                         )}
                       </TableCell>
                       <TableCell className="align-top">
@@ -264,7 +272,7 @@ export default function AdminDashboardPage() {
                             variant="outline"
                             size="sm"
                             className="bg-green-50 hover:bg-green-100 text-green-700 hover:text-green-800 border-green-200 text-xs px-2.5 py-1 h-auto"
-                            disabled={actionLoading !== null || !p.bankAccount}
+                            disabled={actionLoading !== null || (!p.bankAccount && !p.destinationAccountNumber && !p.destinationCryptoAddress)}
                             onClick={() => handleApprovePayout(p.id)}
                           >
                             {actionLoading === `payout-approve-${p.id}` ? 'Procesando…' : 'Liquidar'}

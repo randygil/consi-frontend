@@ -1,6 +1,6 @@
 export type Currency = 'USD' | 'VES';
 export type Environment = 'TEST' | 'LIVE';
-export type Role = 'MERCHANT' | 'ADMIN';
+export type Role = 'MERCHANT' | 'ADMIN' | 'OPERATOR';
 export type TransactionType = 'PAYIN' | 'PAYOUT';
 
 /** The authenticated account (login principal). merchantId is null for admins. */
@@ -21,11 +21,12 @@ export type TransactionStatus =
 
 export type SettleStatus = 'PENDING_RELEASE' | 'RELEASED';
 
-export type Gateway = 'MOCK_BANCAMIGA' | 'MOCK_BANGENTE' | 'STRIPE' | 'MANUAL';
+export type Gateway = 'MOCK_BANCARIBE' | 'MOCK_BANGENTE' | 'MOCK_CRYPTO' | 'STRIPE' | 'MANUAL';
 
 export const GATEWAYS: readonly Gateway[] = [
-  'MOCK_BANCAMIGA',
+  'MOCK_BANCARIBE',
   'MOCK_BANGENTE',
+  'MOCK_CRYPTO',
   'STRIPE',
   'MANUAL',
 ];
@@ -65,6 +66,10 @@ export interface Transaction {
   expiresAt?: string | null;
   provider?: string | null;
   order?: string | null;
+  destinationBankName?: string | null;
+  destinationAccountNumber?: string | null;
+  destinationAccountHolder?: string | null;
+  destinationCryptoAddress?: string | null;
 }
 
 export interface MerchantProfile {
@@ -244,6 +249,42 @@ export interface Dispute {
   amount: string;
   reason: string;
   evidenceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GatewayAccount {
+  id: string;
+  name: string;
+  gateway: string;
+  currency: Currency;
+  accountNumber: string;
+  balance: string;
+  minBalance: string;
+  enabled: boolean;
+  percentageRate: string;
+  fixedFee: string;
+  minFee: string;
+  maxFee: string;
+  taxRate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MerchantGatewayConfig {
+  id: string;
+  merchantId: string;
+  gateway: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SystemAlert {
+  id: string;
+  type: string;
+  message: string;
+  resolved: boolean;
   createdAt: string;
   updatedAt: string;
 }
