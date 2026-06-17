@@ -5,9 +5,11 @@ import { usePathname } from 'next/navigation';
 import {
   ArrowLeftRight,
   Banknote,
+  BookOpen,
   Code2,
   LayoutDashboard,
   Link2,
+  ShieldAlert,
   Wallet,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -20,7 +22,9 @@ const NAV = [
   { href: '/transactions', label: 'Cobros', icon: ArrowLeftRight },
   { href: '/payouts', label: 'Retiros', icon: Banknote },
   { href: '/settlements', label: 'Liquidaciones', icon: Wallet },
+  { href: '/disputes', label: 'Disputas', icon: ShieldAlert },
   { href: '/developers', label: 'Desarrolladores', icon: Code2 },
+  { href: '/docs', label: 'Documentación', icon: BookOpen },
 ];
 
 export function Sidebar({ onLinkClick }: { onLinkClick?: () => void }) {

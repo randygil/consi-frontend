@@ -12,6 +12,7 @@ export interface AuthUser {
 }
 export type TransactionStatus =
   | 'PENDING'
+  | 'AUTHORIZED'
   | 'COMPLETED'
   | 'FAILED'
   | 'REFUNDED'
@@ -58,6 +59,7 @@ export interface Transaction {
   feeAmount?: string | null;
   feeTax?: string | null;
   netAmount?: string | null;
+  refundedAmount?: string | null;
   settleStatus?: SettleStatus | null;
   afterRetentionDate?: string | null;
   expiresAt?: string | null;
@@ -232,4 +234,16 @@ export interface PaymentLinkSummary {
   status: PaymentLinkStatus;
   selectedMethod: PaymentMethod | null;
   createdAt: string;
+}
+
+export interface Dispute {
+  id: string;
+  transactionId: string;
+  transaction: Transaction;
+  status: 'PENDING_EVIDENCE' | 'UNDER_REVIEW' | 'WON' | 'LOST';
+  amount: string;
+  reason: string;
+  evidenceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
