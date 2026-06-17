@@ -876,7 +876,6 @@ export default function DocsPage() {
     | "checkout"
     | "sdk"
     | "endpoints"
-    | "payouts"
     | "webhooks"
     | "testing"
   >("intro");
@@ -1507,21 +1506,17 @@ $token = $res['data']['token'];
       ? codeBlocks.webhooks.req
       : docSection === "sdk"
         ? codeBlocks.sdk.req
-        : docSection === "payouts"
-          ? codeBlocks.payout.req
-          : docSection === "endpoints"
-            ? codeBlocks[activeEndpoint].req
-            : codeBlocks.payment.req;
+        : docSection === "endpoints"
+          ? codeBlocks[activeEndpoint].req
+          : codeBlocks.payment.req;
   const activeRes =
     docSection === "webhooks"
       ? codeBlocks.webhooks.res
       : docSection === "sdk"
         ? codeBlocks.sdk.res
-        : docSection === "payouts"
-          ? codeBlocks.payout.res
-          : docSection === "endpoints"
-            ? codeBlocks[activeEndpoint].res
-            : codeBlocks.payment.res;
+        : docSection === "endpoints"
+          ? codeBlocks[activeEndpoint].res
+          : codeBlocks.payment.res;
   const reqLang =
     docSection === "sdk" && codeLang === "curl"
       ? "markup"
@@ -1537,9 +1532,7 @@ $token = $res['data']['token'];
         ? "POST tu-servidor/webhooks"
         : docSection === "sdk"
           ? "Consi.checkout()"
-          : docSection === "payouts"
-            ? "POST /api/payment/payout"
-            : "Petición HTTP";
+          : "Petición HTTP";
   const terminalMethodTone =
     docSection === "endpoints"
       ? endpointMeta.method === "GET"
@@ -1630,16 +1623,7 @@ $token = $res['data']['token'];
           >
             <Code2 size={14} /> Endpoints Públicos
           </button>
-          <button
-            onClick={() => setDocSection("payouts")}
-            className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-              docSection === "payouts"
-                ? "bg-[var(--blue-50)] text-[var(--blue-700)] font-bold"
-                : "text-[var(--text-body)] hover:bg-[var(--ink-50)]"
-            }`}
-          >
-            <Banknote size={14} /> Retiros (Payouts)
-          </button>
+
           <button
             onClick={() => setDocSection("webhooks")}
             className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
@@ -2400,6 +2384,31 @@ if (res.token) {
                       {/* Expanded detail: parameter table + returns */}
                       {isActive && (
                         <div className="border-t border-[var(--blue-200)] bg-white p-3 space-y-3">
+                          {ep.id === "payout" && (
+                            <div className="space-y-3 border-b border-[var(--border)] pb-3.5 mb-1 text-xs text-[var(--text-body)]">
+                              <p>
+                                Consi permite a los comercios automatizar el retiro de fondos
+                                desde su saldo utilizando nuestro endpoint público de retiros.
+                                Indica el destino del cliente final como objeto{" "}
+                                (<code>destination</code>) o, para liquidar tu propio saldo, una
+                                cuenta registrada (<code>bankAccountId</code>). Consi elige la
+                                pasarela y el modo de retiro internamente.
+                              </p>
+                              <div className="p-3 bg-[var(--blue-50)] border border-[var(--blue-200)] text-[var(--blue-700)] rounded-lg font-semibold">
+                                ℹ️ Recuerda que este endpoint requiere firma HMAC-SHA256 en la
+                                cabecera <strong>x-signature</strong> calculada con la fórmula{" "}
+                                <code className="bg-white/80 px-1 rounded font-mono text-[10px]">
+                                  apiKey|order|amount|currency
+                                </code>
+                                . Si el retiro no incluye order, utiliza un valor vacío en su
+                                lugar:{" "}
+                                <code className="bg-white/80 px-1 rounded font-mono text-[10px]">
+                                  apiKey||amount|currency
+                                </code>
+                                .
+                              </div>
+                            </div>
+                          )}
                           <div>
                             <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)]">
                               {ep.params.some((p) => p.in === "path")
@@ -2496,85 +2505,7 @@ if (res.token) {
             </div>
           )}
 
-          {/* SECTION: PAYOUTS */}
-          {docSection === "payouts" && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-[var(--text-strong)]">
-                Retiros y Payouts programáticos
-              </h2>
-              <p>
-                Consi permite a los comercios automatizar el retiro de fondos
-                desde su saldo utilizando nuestro endpoint público de retiros.
-                Indica el destino del cliente final como objeto
-                (<code>destination</code>) o, para liquidar tu propio saldo, una
-                cuenta registrada (<code>bankAccountId</code>). Consi elige la
-                pasarela y el modo de retiro internamente.
-              </p>
-              <div className="p-3 border border-[var(--border)] rounded-lg bg-[var(--ink-50)] space-y-1">
-                <span className="font-bold text-[var(--text-strong)] block text-xs">
-                  POST /payment/payout
-                </span>
-                <p className="text-xs text-[var(--text-muted)]">
-                  Genera una orden de retiro desde el saldo de tu comercio hacia
-                  el destino indicado.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-bold text-[var(--text-strong)]">
-                  Parámetros del cuerpo (JSON):
-                </h3>
-                <ul className="list-disc pl-5 text-xs space-y-1">
-                  <li>
-                    <strong>amount:</strong> Cadena que representa el monto del
-                    retiro (ej.{" "}
-                    <code className="bg-slate-100 px-1 rounded">"100.00"</code>
-                    ).
-                  </li>
-                  <li>
-                    <strong>currency:</strong> Moneda del retiro (
-                    <code className="bg-slate-100 px-1 rounded">"USD"</code> o{" "}
-                    <code className="bg-slate-100 px-1 rounded">"VES"</code>).
-                  </li>
-                  <li>
-                    <strong>bankAccountId:</strong> El identificador único de la
-                    cuenta bancaria de destino (debe estar en estado{" "}
-                    <em>APPROVED</em>).
-                  </li>
-                  <li>
-                    <strong>destination:</strong> (Opcional) Destino del cliente
-                    final como objeto, ej.{" "}
-                    <code className="bg-slate-100 px-1 rounded">
-                      {`{ "document": "V-12345678", "phone": "0414-1234567", "bank": "0105" }`}
-                    </code>
-                    . Cada pasarela define qué campos exige; si falta uno
-                    requerido la API responde <em>400</em>. Excluyente con
-                    bankAccountId. Consi resuelve la pasarela y el modo de retiro.
-                  </li>
-                  <li>
-                    <strong>order:</strong> (Opcional) Identificador único de
-                    orden de tu sistema para control de duplicados y firma HMAC.
-                  </li>
-                  <li>
-                    <strong>description:</strong> (Opcional) Nota aclaratoria
-                    del retiro.
-                  </li>
-                </ul>
-              </div>
-              <div className="p-3 bg-[var(--blue-50)] border border-[var(--blue-200)] text-[var(--blue-700)] rounded-lg text-xs font-semibold">
-                ℹ️ Recuerda que este endpoint requiere firma HMAC-SHA256 en la
-                cabecera <strong>x-signature</strong> calculada con la fórmula{" "}
-                <code className="bg-white/80 px-1 rounded">
-                  apiKey|order|amount|currency
-                </code>
-                . Si el retiro no incluye order, utiliza un valor vacío en su
-                lugar:{" "}
-                <code className="bg-white/80 px-1 rounded">
-                  apiKey||amount|currency
-                </code>
-                .
-              </div>
-            </div>
-          )}
+
 
           {/* SECTION: WEBHOOKS */}
           {docSection === "webhooks" && (
