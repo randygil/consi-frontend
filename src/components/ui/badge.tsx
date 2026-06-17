@@ -6,6 +6,7 @@ import type { TransactionStatus } from '@/lib/types';
 const statusStyles: Record<TransactionStatus, string> = {
   COMPLETED: 'bg-[var(--success-100)] text-[var(--success-600)]',
   PENDING: 'bg-[var(--warning-100)] text-[var(--warning-600)]',
+  AUTHORIZED: 'bg-[var(--blue-100)] text-[var(--blue-600)]',
   FAILED: 'bg-[var(--danger-100)] text-[var(--danger-600)]',
   REFUNDED: 'bg-[var(--ink-100)] text-[var(--text-muted)]',
   EXPIRED: 'bg-[var(--warning-100)] text-[var(--warning-600)]',

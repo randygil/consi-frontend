@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { CardDropIn } from '@/components/CardDropIn';
 import { checkoutApi } from '@/lib/checkout-client';
 import { formatMoney } from '@/lib/format';
 import type {
@@ -37,6 +38,8 @@ export default function CheckoutPage() {
   const [instructions, setInstructions] = useState<PaymentInstructions | null>(null);
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
+  const [show3ds, setShow3ds] = useState(false);
+  const [loading3ds, setLoading3ds] = useState(false);
 
   useEffect(() => {
     // Always start at method selection. Links are reusable, so a previously-paid
@@ -63,6 +66,19 @@ export default function CheckoutPage() {
 
   const choose = useCallback(
     async (m: PaymentMethod) => {
+      if (m === 'CARD') {
+        // Skip direct payment creation for card method: we transition directly to instructions (interactive form)
+        // and only create/tokenize when they click pay.
+        setInstructions({
+          method: 'CARD',
+          label: 'Tarjeta de Crédito',
+          note: 'Ingresa los datos de tu tarjeta para completar el pago de forma segura.',
+          fields: [],
+          interactive: true,
+        });
+        setStep('instructions');
+        return;
+      }
       setBusy(true);
       setError(null);
       try {
@@ -77,6 +93,23 @@ export default function CheckoutPage() {
     },
     [token],
   );
+
+  const onTokenizeSuccess = useCallback(async (cardToken: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.pay(token, 'CARD', cardToken);
+      if (res.status === 'AUTHORIZED') {
+        setShow3ds(true);
+      } else {
+        setStep('done');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al procesar el pago');
+    } finally {
+      setBusy(false);
+    }
+  }, [token]);
 
   const confirm = useCallback(async () => {
     setBusy(true);
@@ -151,6 +184,8 @@ export default function CheckoutPage() {
             setError(null);
             setStep('method');
           }}
+          onTokenizeSuccess={onTokenizeSuccess}
+          setError={setError}
         />
       )}
 
@@ -159,6 +194,61 @@ export default function CheckoutPage() {
       {error && data ? (
         <p className="text-center text-xs text-[var(--danger-600)]">{error}</p>
       ) : null}
+
+      {/* Simulated 3D Secure 2.0 Challenge Modal */}
+      {show3ds && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-sm rounded-[var(--radius-lg)] bg-white p-6 shadow-2xl border border-[var(--ink-100)] text-center space-y-4">
+            <span className="flex size-14 items-center justify-center rounded-full bg-[var(--blue-50)] text-[var(--blue-700)] mx-auto">
+              <Smartphone size={28} className="animate-bounce" />
+            </span>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-[var(--text-strong)]">Autenticación 3D Secure 2.0</h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Para tu seguridad, autoriza esta transacción presionando el botón de abajo (simulación de biometría/app del banco).
+              </p>
+            </div>
+            
+            <div className="border border-[var(--ink-100)] rounded-[var(--radius-md)] p-3 bg-[var(--ink-50)] text-xs font-semibold text-[var(--text-body)] font-mono">
+              Comercio: {data.businessName} <br />
+              Monto: {formatMoney(data.amount, data.currency)}
+            </div>
+
+            <button
+              type="button"
+              disabled={loading3ds}
+              onClick={async () => {
+                setLoading3ds(true);
+                try {
+                  const res = await checkoutApi.confirm3ds(token);
+                  if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+                    setShow3ds(false);
+                    setStep('done');
+                  } else {
+                    setError('Autenticación 3DS fallida. Intenta nuevamente.');
+                  }
+                } catch (e: any) {
+                  setError(e.message || 'Error en autenticación 3DS');
+                } finally {
+                  setLoading3ds(false);
+                }
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+              style={{ background: 'var(--gradient-brand)' }}
+            >
+              {loading3ds ? <Loader2 size={16} className="animate-spin" /> : null}
+              Confirmar Autenticación
+            </button>
+            <button
+              type="button"
+              onClick={() => setShow3ds(false)}
+              className="w-full text-center text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }
@@ -212,6 +302,8 @@ function InstructionsView({
   onReferenceChange,
   onConfirm,
   onBack,
+  onTokenizeSuccess,
+  setError,
 }: {
   instructions: PaymentInstructions;
   busy: boolean;
@@ -219,6 +311,8 @@ function InstructionsView({
   onReferenceChange: (value: string) => void;
   onConfirm: () => void;
   onBack: () => void;
+  onTokenizeSuccess: (token: string) => void;
+  setError: (err: string | null) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -231,7 +325,7 @@ function InstructionsView({
       <p className="text-[13px] leading-relaxed text-[var(--text-body)]">{instructions.note}</p>
 
       {instructions.interactive ? (
-        <CardForm />
+        <CardDropIn onSuccess={onTokenizeSuccess} onError={setError} />
       ) : (
         <>
           {instructions.qr ? <QrBox value={instructions.qr} /> : null}
@@ -259,9 +353,10 @@ function InstructionsView({
       )}
 
       <button
-        type="button"
+        type={instructions.interactive ? 'submit' : 'button'}
+        form={instructions.interactive ? 'card-dropin-form' : undefined}
         disabled={busy}
-        onClick={onConfirm}
+        onClick={instructions.interactive ? undefined : onConfirm}
         className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
         style={{ background: 'var(--gradient-brand)' }}
       >

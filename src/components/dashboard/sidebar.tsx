@@ -8,6 +8,7 @@ import {
   Code2,
   LayoutDashboard,
   Link2,
+  ShieldAlert,
   Wallet,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -20,6 +21,7 @@ const NAV = [
   { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight },
   { href: '/payouts', label: 'Retiros', icon: Banknote },
   { href: '/settlements', label: 'Liquidaciones', icon: Wallet },
+  { href: '/disputes', label: 'Disputas', icon: ShieldAlert },
   { href: '/developers', label: 'Desarrolladores', icon: Code2 },
 ];
 

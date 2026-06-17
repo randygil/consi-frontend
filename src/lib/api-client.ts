@@ -9,6 +9,7 @@ import type {
   AuthUser,
   BankAccount,
   Currency,
+  Dispute,
   Environment,
   ExchangeRate,
   Gateway,
@@ -103,10 +104,17 @@ export const api = {
     request<Transaction>(`/transactions/${id}/confirm`, { method: 'POST' }),
   rejectTransaction: (id: string) =>
     request<Transaction>(`/transactions/${id}/reject`, { method: 'POST' }),
-  refundTransaction: (id: string) =>
-    request<Transaction>(`/transactions/${id}/refund`, { method: 'POST' }),
+  refundTransaction: (id: string, amount?: string) =>
+    request<Transaction>(`/transactions/${id}/refund`, {
+      method: 'POST',
+      body: amount ? JSON.stringify({ amount }) : undefined,
+    }),
   chargebackTransaction: (id: string) =>
     request<Transaction>(`/transactions/${id}/chargeback`, { method: 'POST' }),
+  captureTransaction: (id: string) =>
+    request<Transaction>(`/transactions/${id}/capture`, { method: 'POST' }),
+  voidTransaction: (id: string) =>
+    request<Transaction>(`/transactions/${id}/void`, { method: 'POST' }),
 
   getSettlementsPending: () => request<Transaction[]>('/settlements/pending'),
   runSettlement: () =>
@@ -139,4 +147,32 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  // ---- Disputes ----
+  getDisputes: () => request<Dispute[]>('/disputes'),
+  getDispute: (id: string) => request<Dispute>(`/disputes/${id}`),
+  submitDispute: (id: string) =>
+    request<Dispute>(`/disputes/${id}/submit`, { method: 'POST' }),
+  resolveDispute: (id: string, status: 'WON' | 'LOST') =>
+    request<Dispute>(`/disputes/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    }),
+  uploadEvidence: async (id: string, file: File) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`/api/disputes/${id}/evidence`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    const body = await res.json();
+    if (!res.ok || !body.success) {
+      throw new Error(body.error || 'Fallo al subir evidencia');
+    }
+    return body.data as Dispute;
+  },
 };

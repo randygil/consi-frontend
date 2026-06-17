@@ -26,10 +26,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const checkoutApi = {
   get: (token: string) => request<CheckoutData>(`/${token}`),
-  pay: (token: string, method: PaymentMethod, customerName?: string) =>
+  pay: (token: string, method: PaymentMethod, cardToken?: string, customerName?: string) =>
     request<PayResult>(`/${token}/pay`, {
       method: 'POST',
-      body: JSON.stringify({ method, ...(customerName ? { customerName } : {}) }),
+      body: JSON.stringify({
+        method,
+        ...(cardToken ? { cardToken } : {}),
+        ...(customerName ? { customerName } : {}),
+      }),
     }),
   status: (token: string) => request<CheckoutStatus>(`/${token}/status`),
   /** Report the payment (with the bank reference) → drives the real confirmation webhook. */
@@ -37,5 +41,9 @@ export const checkoutApi = {
     request<{ status: string; transactionStatus: string | null }>(`/${token}/confirm`, {
       method: 'POST',
       body: JSON.stringify(reference ? { reference } : {}),
+    }),
+  confirm3ds: (token: string) =>
+    request<{ status: string; transactionStatus: string | null }>(`/${token}/3ds-confirm`, {
+      method: 'POST',
     }),
 };
