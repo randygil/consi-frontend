@@ -1470,8 +1470,71 @@ $token = $res['data']['token'];
                     <li>Invoca <code className="font-mono bg-[var(--ink-100)] px-1 rounded text-xs">Consi.checkout(...)</code> indicando el token del pago y el callback de éxito.</li>
                   </ol>
                 </div>
+
+                <h3 className="font-bold text-[var(--text-strong)] mt-4">3. Consi Elements (Pasarela de Tarjetas Custom UI)</h3>
+                <p>
+                  Si deseas una experiencia totalmente integrada donde el usuario rellena los campos de tarjeta directamente en tu interfaz sin salir de la página de pago, utiliza <strong>Consi Elements</strong>. Elements utiliza un iframe seguro aislado para tokenizar los datos sensibles de la tarjeta directamente contra el vault de Consi (cumpliendo con PCI DSS sin manejar números de tarjeta en tus servidores).
+                </p>
+                <div className="p-3 border border-[var(--border)] rounded-lg bg-[var(--ink-50)] text-xs space-y-2">
+                  <span className="font-bold text-[var(--text-strong)] block">Integración en 3 pasos:</span>
+                  <p><strong>Paso 1:</strong> Crea el contenedor DOM en tu página:</p>
+                  <CodeBlock code={`<div id="card-element"></div>`} language="markup" maxHeight={60} />
+                  <p className="mt-2"><strong>Paso 2:</strong> Inicializa y monta el iframe de tarjeta con estilos personalizados:</p>
+                  <CodeBlock code={`const elements = Consi.elements({
+  style: {
+    background: '#1e293b', // Color de fondo del iframe
+    color: '#ffffff',      // Color de texto e inputs
+    borderColor: '#334155', // Bordes de inputs
+    borderRadius: '8px'    // Radio de borde de inputs
+  }
+});
+const card = elements.create('card');
+card.mount('#card-element');`} language="javascript" maxHeight={150} />
+                  <p className="mt-2"><strong>Paso 3:</strong> Tokeniza los datos cuando el usuario haga clic en pagar:</p>
+                  <CodeBlock code={`const res = await card.tokenize();
+if (res.token) {
+  // Envía res.token a tu backend para crear la transacción directa
+} else {
+  console.error(res.error);
+}`} language="javascript" maxHeight={100} />
+                </div>
+
+                <h3 className="font-bold text-[var(--text-strong)] mt-4">4. Pago Móvil Automático (Verificación por Teléfono)</h3>
+                <p>
+                  Consi provee un motor de conciliación automática para Pago Móvil. En vez de solicitar al cliente ingresar un código de referencia bancaria tras realizar el pago, puedes simplemente solicitarle el <strong>número de teléfono</strong> desde el cual transfirió.
+                </p>
+                <p>
+                  Al enviar la confirmación con el teléfono, Consi busca automáticamente en los pagos entrantes reportados por la banca uno que coincida con el monto exacto en VES y cuyo número emisor coincida con los últimos 7 dígitos ingresados.
+                </p>
+                <div className="p-3 border border-[var(--border)] rounded-lg bg-[var(--ink-50)] text-xs space-y-1">
+                  <span className="font-bold text-[var(--text-strong)] block">Endpoint de Confirmación Automática:</span>
+                  <span className="font-mono text-[var(--blue-700)] block font-bold mb-1">POST /api/checkout/:token/confirm-auto</span>
+                  <CodeBlock code={`// Petición JSON:
+{
+  "phone": "04125551234"
+}`} language="json" maxHeight={70} />
+                  <p className="text-[var(--text-muted)] mt-1">
+                    Esto resolverá y completará el pago de inmediato si la transferencia bancaria ya fue recibida, sin intervención manual de referencias.
+                  </p>
+                </div>
+
+                <div className="p-3 border border-[var(--success)] rounded-lg bg-[var(--success-bg,var(--ink-50))] text-xs space-y-1">
+                  <span className="font-bold text-[var(--text-strong)] block">📱 Teléfonos de prueba (modo test)</span>
+                  <p className="text-[var(--text-muted)]">
+                    En entorno de pruebas no hay un banco real enviando los avisos de Pago Móvil, por lo que la conciliación normal no encontraría coincidencias. Usa un <strong>teléfono de prueba</strong> cuyos 7 dígitos finales sean ceros y el pago se aprobará siempre de forma automática:
+                  </p>
+                  <ul className="list-disc pl-4 text-[var(--text-muted)]">
+                    <li><span className="font-mono text-[var(--text-strong)]">0412-000-0000</span> → aprueba siempre</li>
+                    <li><span className="font-mono text-[var(--text-strong)]">0414-000-0000</span> → aprueba siempre</li>
+                    <li>Cualquier número terminado en <span className="font-mono text-[var(--text-strong)]">0000000</span></li>
+                  </ul>
+                  <p className="text-[var(--text-muted)]">
+                    Para simular un aviso bancario real (en vez del modo test), envía primero <span className="font-mono text-[var(--text-strong)]">POST /api/webhooks/pago-movil-bank</span> con <span className="font-mono">{`{ phone, amount, reference }`}</span> y luego confirma con ese mismo teléfono.
+                  </p>
+                </div>
               </div>
-            )}
+            )
+            }
 
             {/* SECTION: SDK INTEGRATION */}
             {docSection === 'sdk' && (

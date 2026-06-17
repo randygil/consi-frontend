@@ -37,6 +37,7 @@ export default function CheckoutPage() {
   const [step, setStep] = useState<Step>('method');
   const [instructions, setInstructions] = useState<PaymentInstructions | null>(null);
   const [reference, setReference] = useState('');
+  const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [show3ds, setShow3ds] = useState(false);
   const [loading3ds, setLoading3ds] = useState(false);
@@ -128,6 +129,25 @@ export default function CheckoutPage() {
     }
   }, [token, reference]);
 
+  // Pago Móvil: confirm by the sender's phone number — we reconcile it automatically
+  // against the bank's inbound report, no reference to copy.
+  const confirmByPhone = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.confirmAuto(token, phone.trim());
+      if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+        setStep('done');
+      } else {
+        setError('No pudimos confirmar el pago todavía. Intenta de nuevo en unos segundos.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, phone]);
+
   if (error && !data) {
     return (
       <Shell>
@@ -178,9 +198,13 @@ export default function CheckoutPage() {
           busy={busy}
           reference={reference}
           onReferenceChange={setReference}
+          phone={phone}
+          onPhoneChange={setPhone}
           onConfirm={confirm}
+          onConfirmByPhone={confirmByPhone}
           onBack={() => {
             setReference('');
+            setPhone('');
             setError(null);
             setStep('method');
           }}
@@ -300,7 +324,10 @@ function InstructionsView({
   busy,
   reference,
   onReferenceChange,
+  phone,
+  onPhoneChange,
   onConfirm,
+  onConfirmByPhone,
   onBack,
   onTokenizeSuccess,
   setError,
@@ -309,11 +336,20 @@ function InstructionsView({
   busy: boolean;
   reference: string;
   onReferenceChange: (value: string) => void;
+  phone: string;
+  onPhoneChange: (value: string) => void;
   onConfirm: () => void;
+  onConfirmByPhone: () => void;
   onBack: () => void;
   onTokenizeSuccess: (token: string) => void;
   setError: (err: string | null) => void;
 }) {
+  // Pago Móvil confirms by the sender's phone (auto-reconciled); other rails still
+  // confirm by the bank reference. `useReference` lets the payer fall back to a reference.
+  const isPagoMovil = instructions.method === 'PAGO_MOVIL';
+  const [useReference, setUseReference] = useState(false);
+  const phoneMode = isPagoMovil && !useReference;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -334,34 +370,73 @@ function InstructionsView({
               <Field key={f.label} label={f.label} value={f.value} copyable={f.copyable !== false} />
             ))}
           </div>
-          <label className="block space-y-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-              Número de referencia del pago
-            </span>
-            <input
-              value={reference}
-              onChange={(e) => onReferenceChange(e.target.value)}
-              placeholder="Ej. 0123456789"
-              inputMode="numeric"
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-            />
-            <span className="text-[11px] text-[var(--text-subtle)]">
-              Ingresa la referencia que te dio tu banco para confirmar el pago.
-            </span>
-          </label>
+
+          {phoneMode ? (
+            <label className="block space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+                Teléfono desde el que pagaste
+              </span>
+              <input
+                value={phone}
+                onChange={(e) => onPhoneChange(e.target.value)}
+                placeholder="Ej. 0412-1234567"
+                inputMode="tel"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
+              />
+              <span className="text-[11px] text-[var(--text-subtle)]">
+                Verificamos tu pago automáticamente con tu número. No necesitas la referencia.
+              </span>
+              <button
+                type="button"
+                onClick={() => onPhoneChange('0412-000-0000')}
+                className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
+              >
+                🧪 Usar teléfono de prueba
+              </button>
+            </label>
+          ) : (
+            <label className="block space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+                Número de referencia del pago
+              </span>
+              <input
+                value={reference}
+                onChange={(e) => onReferenceChange(e.target.value)}
+                placeholder="Ej. 0123456789"
+                inputMode="numeric"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
+              />
+              <span className="text-[11px] text-[var(--text-subtle)]">
+                Ingresa la referencia que te dio tu banco para confirmar el pago.
+              </span>
+            </label>
+          )}
+
+          {isPagoMovil ? (
+            <button
+              type="button"
+              onClick={() => {
+                setUseReference((v) => !v);
+                setError(null);
+              }}
+              className="text-[12px] font-medium text-[var(--blue-700)] hover:underline"
+            >
+              {useReference ? '← Verificar con mi número de teléfono' : '¿Prefieres usar la referencia bancaria?'}
+            </button>
+          ) : null}
         </>
       )}
 
       <button
         type={instructions.interactive ? 'submit' : 'button'}
         form={instructions.interactive ? 'card-dropin-form' : undefined}
-        disabled={busy}
-        onClick={instructions.interactive ? undefined : onConfirm}
+        disabled={busy || (phoneMode && phone.trim().length < 7)}
+        onClick={instructions.interactive ? undefined : phoneMode ? onConfirmByPhone : onConfirm}
         className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
         style={{ background: 'var(--gradient-brand)' }}
       >
         {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-        {instructions.interactive ? 'Pagar ahora' : 'Ya realicé el pago'}
+        {instructions.interactive ? 'Pagar ahora' : phoneMode ? 'Verificar mi pago' : 'Ya realicé el pago'}
       </button>
       <button
         type="button"
@@ -413,33 +488,6 @@ function QrBox({ value }: { value: string }) {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="Código QR de pago" width={150} height={150} className="rounded-[8px]" />
       <span className="text-[11px] text-[var(--text-subtle)]">Escanea para pagar</span>
-    </div>
-  );
-}
-
-function CardForm() {
-  return (
-    <div className="space-y-2.5">
-      <input
-        placeholder="Número de tarjeta"
-        inputMode="numeric"
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-      />
-      <div className="flex gap-2.5">
-        <input
-          placeholder="MM/AA"
-          className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-        />
-        <input
-          placeholder="CVC"
-          inputMode="numeric"
-          className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-        />
-      </div>
-      <input
-        placeholder="Nombre en la tarjeta"
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 text-sm outline-none focus:border-[var(--blue-400)]"
-      />
     </div>
   );
 }

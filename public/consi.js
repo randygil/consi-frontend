@@ -1,14 +1,20 @@
 /*!
- * Consi.js — embeddable hosted-checkout drop-in.
+ * Consi.js — embeddable hosted-checkout drop-in and custom secure Elements.
  *
  * Usage on a merchant site:
  *   <script src="https://pay.consi.example/consi.js"></script>
  *   <script>
+ *     // SDK Modal Mode
  *     Consi.checkout({ token: 'demo-link', onSuccess: () => location.reload() });
+ *
+ *     // Elements Custom Iframe Mode
+ *     const elements = Consi.elements({ style: { color: '#000' } });
+ *     const card = elements.create('card');
+ *     card.mount('#card-container');
  *   </script>
  *
- * Opens the hosted checkout (/c/{token}) in a centered modal iframe — the
- * Stripe-Elements-style drop-in. No dependencies.
+ * Opens the hosted checkout (/c/{token}) in a centered modal iframe, or mounts custom elements.
+ * No dependencies.
  */
 (function (global) {
   'use strict';
@@ -79,5 +85,107 @@
     return { close: close };
   }
 
-  global.Consi = { checkout: checkout };
+  function elements(options) {
+    options = options || {};
+
+    function create(type, elementOptions) {
+      if (type !== 'card') {
+        throw new Error("Consi.elements: Only type 'card' is supported.");
+      }
+      elementOptions = elementOptions || {};
+
+      var container = null;
+      var iframe = null;
+      var onChangeHandler = null;
+      var onTokenSuccess = null;
+      var onTokenError = null;
+
+      function mount(selector) {
+        var el = document.querySelector(selector);
+        if (!el) throw new Error("Consi Elements: Mount target '" + selector + "' not found");
+        container = el;
+
+        iframe = document.createElement('iframe');
+        var mergedStyle = Object.assign({}, options.style || {}, elementOptions.style || {});
+        var styleParam = encodeURIComponent(JSON.stringify(mergedStyle));
+        iframe.src = ORIGIN + '/elements/card?style=' + styleParam;
+        iframe.style.cssText = 'width:100%;height:220px;border:0;background:transparent;overflow:hidden;';
+        iframe.setAttribute('title', 'Secure Card Input');
+
+        container.appendChild(iframe);
+
+        function handleMessage(e) {
+          if (e.origin !== ORIGIN) return;
+          if (e.data.type === 'consi:elements_change') {
+            if (typeof onChangeHandler === 'function') {
+              onChangeHandler(e.data);
+            }
+          } else if (e.data.type === 'consi:elements_token_success') {
+            if (typeof onTokenSuccess === 'function') {
+              onTokenSuccess(e.data.token);
+            }
+          } else if (e.data.type === 'consi:elements_token_error') {
+            if (typeof onTokenError === 'function') {
+              onTokenError(e.data.error);
+            }
+          }
+        }
+
+        window.addEventListener('message', handleMessage);
+
+        return {
+          unmount: function() {
+            if (iframe && iframe.parentNode) {
+              iframe.parentNode.removeChild(iframe);
+            }
+            window.removeEventListener('message', handleMessage);
+          }
+        };
+      }
+
+      function on(event, handler) {
+        if (event === 'change') {
+          onChangeHandler = handler;
+        }
+      }
+
+      function tokenize() {
+        return new Promise(function(resolve, reject) {
+          if (!iframe) {
+            reject(new Error("Consi Elements: Element is not mounted yet"));
+            return;
+          }
+
+          onTokenSuccess = function(token) {
+            resolve({ token: token });
+            onTokenSuccess = null;
+            onTokenError = null;
+          };
+
+          onTokenError = function(err) {
+            resolve({ error: err });
+            onTokenSuccess = null;
+            onTokenError = null;
+          };
+
+          iframe.contentWindow.postMessage({ type: 'consi:elements_tokenize' }, ORIGIN);
+        });
+      }
+
+      return {
+        mount: mount,
+        on: on,
+        tokenize: tokenize
+      };
+    }
+
+    return {
+      create: create
+    };
+  }
+
+  global.Consi = {
+    checkout: checkout,
+    elements: elements
+  };
 })(window);

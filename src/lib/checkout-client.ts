@@ -46,4 +46,10 @@ export const checkoutApi = {
     request<{ status: string; transactionStatus: string | null }>(`/${token}/3ds-confirm`, {
       method: 'POST',
     }),
+  /** Auto-confirm a Pago Móvil by the sender's phone number (no bank reference needed). */
+  confirmAuto: (token: string, phone: string) =>
+    request<{ status: string; transactionStatus: string | null; reference: string | null }>(
+      `/${token}/confirm-auto`,
+      { method: 'POST', body: JSON.stringify({ phone }) },
+    ),
 };
