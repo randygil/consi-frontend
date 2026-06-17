@@ -6,13 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StatusBadge } from '@/components/ui/badge';
 import { api } from '@/lib/api-client';
-import { formatMoney } from '@/lib/format';
-import { GATEWAYS, type BankAccount, type Currency, type Gateway, type Wallet } from '@/lib/types';
+import { formatMoney, formatDate } from '@/lib/format';
+import { GATEWAYS, type BankAccount, type Currency, type Gateway, type Wallet, type Transaction } from '@/lib/types';
 
 export default function PayoutsPage() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [payoutsList, setPayoutsList] = useState<Transaction[]>([]);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCurrency, setFilterCurrency] = useState('');
   
   // Solicitar Retiro Form State
   const [bankAccountId, setBankAccountId] = useState('');
@@ -33,9 +38,14 @@ export default function PayoutsPage() {
   const [regLoading, setRegLoading] = useState(false);
 
   const refresh = () =>
-    Promise.all([api.getBankAccounts(), api.getBalances()]).then(([a, w]) => {
+    Promise.all([
+      api.getBankAccounts(),
+      api.getBalances(),
+      api.getTransactions({ type: 'PAYOUT' })
+    ]).then(([a, w, p]) => {
       setAccounts(a);
       setWallets(w);
+      setPayoutsList(p);
       
       // Auto-select first APPROVED bank account in the payout form
       const approvedAccounts = a.filter((acc) => acc.status === 'APPROVED');
@@ -52,6 +62,16 @@ export default function PayoutsPage() {
   useEffect(() => {
     refresh();
   }, []);
+
+  // Fetch payouts list when filters change
+  useEffect(() => {
+    const params: Record<string, string> = { type: 'PAYOUT' };
+    if (filterStatus) params.status = filterStatus;
+    if (filterCurrency) params.currency = filterCurrency;
+    api.getTransactions(params)
+      .then(setPayoutsList)
+      .catch(() => {});
+  }, [filterStatus, filterCurrency]);
 
   const approvedAccounts = accounts.filter((a) => a.status === 'APPROVED');
   const selected = approvedAccounts.find((a) => a.id === bankAccountId);
@@ -361,6 +381,71 @@ export default function PayoutsPage() {
           </Card>
         </div>
       </div>
+
+      {/* HISTORICAL PAYOUTS TABLE CARD */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base font-semibold text-[var(--foreground)]">Historial de retiros</CardTitle>
+          <div className="flex gap-2">
+            <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-[140px] text-xs">
+              <option value="">Todos los estados</option>
+              <option value="PENDING">Pendiente</option>
+              <option value="COMPLETED">Completado</option>
+              <option value="FAILED">Fallido</option>
+            </Select>
+            <Select value={filterCurrency} onChange={(e) => setFilterCurrency(e.target.value)} className="w-[110px] text-xs">
+              <option value="">Monedas</option>
+              <option value="USD">USD</option>
+              <option value="VES">VES</option>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Referencia</TableHead>
+                <TableHead>Monto</TableHead>
+                <TableHead>Comisión</TableHead>
+                <TableHead>Neto</TableHead>
+                <TableHead>Destino</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Fecha</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {payoutsList.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-[var(--muted-foreground)] py-6">
+                    No hay retiros registrados
+                  </TableCell>
+                </TableRow>
+              ) : (
+                payoutsList.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-mono text-xs">{t.reference.slice(0, 14)}</TableCell>
+                    <TableCell>{formatMoney(t.amount, t.currency)}</TableCell>
+                    <TableCell className="text-[var(--muted-foreground)]">
+                      {t.feeAmount ? formatMoney(t.feeAmount, t.currency) : '—'}
+                    </TableCell>
+                    <TableCell>{t.netAmount ? formatMoney(t.netAmount, t.currency) : '—'}</TableCell>
+                    <TableCell className="text-xs text-[var(--muted-foreground)] max-w-xs truncate">
+                      {t.description ?? 'Retiro directo'}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={t.status} />
+                    </TableCell>
+                    <TableCell className="text-[var(--muted-foreground)] text-xs">
+                      {formatDate(t.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+

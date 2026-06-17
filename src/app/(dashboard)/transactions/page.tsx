@@ -15,13 +15,12 @@ import type { Transaction } from '@/lib/types';
 export default function TransactionsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState({ status: '', currency: '', type: '', from: '', to: '' });
+  const [filters, setFilters] = useState({ status: '', currency: '', from: '', to: '' });
 
   const load = useCallback(() => {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { type: 'PAYIN' };
     if (filters.status) params.status = filters.status;
     if (filters.currency) params.currency = filters.currency;
-    if (filters.type) params.type = filters.type;
     if (filters.from) params.from = new Date(filters.from).toISOString();
     if (filters.to) params.to = new Date(filters.to).toISOString();
     api.getTransactions(params).then(setRows).catch((e) =>
@@ -60,7 +59,7 @@ export default function TransactionsPage() {
       <Card>
         <CardHeader><CardTitle className="text-base font-semibold text-[var(--foreground)]">Filtros</CardTitle></CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-1.5">
               <Label>Estado</Label>
               <Select value={filters.status} onChange={set('status')}>
@@ -77,14 +76,6 @@ export default function TransactionsPage() {
                 <option value="">Todas</option>
                 <option value="USD">USD</option>
                 <option value="VES">VES</option>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Tipo</Label>
-              <Select value={filters.type} onChange={set('type')}>
-                <option value="">Todos</option>
-                <option value="PAYIN">Payin</option>
-                <option value="PAYOUT">Payout</option>
               </Select>
             </div>
             <div className="space-y-1.5">
@@ -107,7 +98,6 @@ export default function TransactionsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Referencia</TableHead>
-                <TableHead>Tipo</TableHead>
                 <TableHead>Gateway</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Comisión</TableHead>
@@ -124,7 +114,6 @@ export default function TransactionsPage() {
               ) : rows.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="font-mono text-xs">{t.reference.slice(0, 14)}</TableCell>
-                  <TableCell className="font-medium">{t.type}</TableCell>
                   <TableCell className="text-[var(--muted-foreground)]">{t.provider ?? '—'}</TableCell>
                   <TableCell>{formatMoney(t.amount, t.currency)}</TableCell>
                   <TableCell className="text-[var(--muted-foreground)]">
@@ -158,7 +147,7 @@ export default function TransactionsPage() {
                           </Button>
                         </>
                       ) : null}
-                      {t.status === 'COMPLETED' && t.type === 'PAYIN' ? (
+                      {t.status === 'COMPLETED' ? (
                         <>
                           <Button
                             size="sm"
