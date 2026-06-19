@@ -7,6 +7,7 @@ import {
   Banknote,
   BookOpen,
   Code2,
+  CreditCard,
   LayoutDashboard,
   Link2,
   ShieldAlert,
@@ -19,6 +20,7 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/', label: 'Panel', icon: LayoutDashboard },
   { href: '/links', label: 'Links de pago', icon: Link2 },
+  { href: '/methods', label: 'Métodos de pago', icon: CreditCard },
   { href: '/transactions', label: 'Cobros', icon: ArrowLeftRight },
   { href: '/payouts', label: 'Retiros', icon: Banknote },
   { href: '/settlements', label: 'Liquidaciones', icon: Wallet },

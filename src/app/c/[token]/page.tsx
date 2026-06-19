@@ -6,6 +6,7 @@ import {
   Coins,
   Copy,
   CreditCard,
+  DollarSign,
   Loader2,
   Lock,
   Smartphone,
@@ -26,6 +27,9 @@ const METHOD_ICON: Record<PaymentMethod, React.ReactNode> = {
   TRANSFER: <Building2 size={20} />,
   USDT: <Coins size={20} />,
   CARD: <CreditCard size={20} />,
+  OTP_DEBIT: <Lock size={20} />,
+  C2P: <Lock size={20} />,
+  ZELLE: <DollarSign size={20} />,
 };
 
 type Step = 'method' | 'instructions' | 'done';
@@ -38,6 +42,7 @@ export default function CheckoutPage() {
   const [instructions, setInstructions] = useState<PaymentInstructions | null>(null);
   const [reference, setReference] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [show3ds, setShow3ds] = useState(false);
   const [loading3ds, setLoading3ds] = useState(false);
@@ -148,6 +153,24 @@ export default function CheckoutPage() {
     }
   }, [token, phone]);
 
+  // Zelle: confirm by the sender's email — reconciled against the incoming Zelle feed.
+  const confirmByEmail = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.confirmZelle(token, email.trim());
+      if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+        setStep('done');
+      } else {
+        setError('No pudimos confirmar el pago todavía. Intenta de nuevo en unos segundos.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, email]);
+
   if (error && !data) {
     return (
       <Shell>
@@ -194,17 +217,23 @@ export default function CheckoutPage() {
 
       {step === 'instructions' && instructions && (
         <InstructionsView
+          token={token}
           instructions={instructions}
           busy={busy}
           reference={reference}
           onReferenceChange={setReference}
           phone={phone}
           onPhoneChange={setPhone}
+          email={email}
+          onEmailChange={setEmail}
           onConfirm={confirm}
           onConfirmByPhone={confirmByPhone}
+          onConfirmByEmail={confirmByEmail}
+          onPaid={() => setStep('done')}
           onBack={() => {
             setReference('');
             setPhone('');
+            setEmail('');
             setError(null);
             setStep('method');
           }}
@@ -320,33 +349,45 @@ function AmountBlock({ data }: { data: CheckoutData }) {
 }
 
 function InstructionsView({
+  token,
   instructions,
   busy,
   reference,
   onReferenceChange,
   phone,
   onPhoneChange,
+  email,
+  onEmailChange,
   onConfirm,
   onConfirmByPhone,
+  onConfirmByEmail,
+  onPaid,
   onBack,
   onTokenizeSuccess,
   setError,
 }: {
+  token: string;
   instructions: PaymentInstructions;
   busy: boolean;
   reference: string;
   onReferenceChange: (value: string) => void;
   phone: string;
   onPhoneChange: (value: string) => void;
+  email: string;
+  onEmailChange: (value: string) => void;
   onConfirm: () => void;
   onConfirmByPhone: () => void;
+  onConfirmByEmail: () => void;
+  onPaid: () => void;
   onBack: () => void;
   onTokenizeSuccess: (token: string) => void;
   setError: (err: string | null) => void;
 }) {
-  // Pago Móvil confirms by the sender's phone (auto-reconciled); other rails still
-  // confirm by the bank reference. `useReference` lets the payer fall back to a reference.
+  // Pago Móvil confirms by the sender's phone (auto-reconciled); Zelle by the sender's
+  // email; C2P/OTP-debit is an interactive OTP flow; other rails confirm by bank reference.
   const isPagoMovil = instructions.method === 'PAGO_MOVIL';
+  const isC2P = instructions.method === 'C2P' || instructions.method === 'OTP_DEBIT';
+  const isZelle = instructions.method === 'ZELLE';
   const [useReference, setUseReference] = useState(false);
   const phoneMode = isPagoMovil && !useReference;
 
@@ -360,7 +401,9 @@ function InstructionsView({
       </div>
       <p className="text-[13px] leading-relaxed text-[var(--text-body)]">{instructions.note}</p>
 
-      {instructions.interactive ? (
+      {instructions.interactive && isC2P ? (
+        <OtpForm token={token} onDone={onPaid} setError={setError} />
+      ) : instructions.interactive ? (
         <CardDropIn onSuccess={onTokenizeSuccess} onError={setError} />
       ) : (
         <>
@@ -392,6 +435,29 @@ function InstructionsView({
                 className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
               >
                 🧪 Usar teléfono de prueba
+              </button>
+            </label>
+          ) : isZelle ? (
+            <label className="block space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+                Correo desde el que enviaste el Zelle
+              </span>
+              <input
+                value={email}
+                onChange={(e) => onEmailChange(e.target.value)}
+                placeholder="tucorreo@ejemplo.com"
+                inputMode="email"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
+              />
+              <span className="text-[11px] text-[var(--text-subtle)]">
+                Verificamos tu pago automáticamente con el correo del remitente.
+              </span>
+              <button
+                type="button"
+                onClick={() => onEmailChange('pagador@test.com')}
+                className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
+              >
+                🧪 Usar correo de prueba
               </button>
             </label>
           ) : (
@@ -427,23 +493,146 @@ function InstructionsView({
         </>
       )}
 
-      <button
-        type={instructions.interactive ? 'submit' : 'button'}
-        form={instructions.interactive ? 'card-dropin-form' : undefined}
-        disabled={busy || (phoneMode && phone.trim().length < 7)}
-        onClick={instructions.interactive ? undefined : phoneMode ? onConfirmByPhone : onConfirm}
-        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
-        style={{ background: 'var(--gradient-brand)' }}
-      >
-        {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-        {instructions.interactive ? 'Pagar ahora' : phoneMode ? 'Verificar mi pago' : 'Ya realicé el pago'}
-      </button>
+      {instructions.interactive && isC2P ? null : (
+        <button
+          type={instructions.interactive ? 'submit' : 'button'}
+          form={instructions.interactive ? 'card-dropin-form' : undefined}
+          disabled={
+            busy ||
+            (phoneMode && phone.trim().length < 7) ||
+            (isZelle && !email.includes('@'))
+          }
+          onClick={
+            instructions.interactive
+              ? undefined
+              : phoneMode
+                ? onConfirmByPhone
+                : isZelle
+                  ? onConfirmByEmail
+                  : onConfirm
+          }
+          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+          style={{ background: 'var(--gradient-brand)' }}
+        >
+          {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+          {instructions.interactive
+            ? 'Pagar ahora'
+            : phoneMode || isZelle
+              ? 'Verificar mi pago'
+              : 'Ya realicé el pago'}
+        </button>
+      )}
       <button
         type="button"
         onClick={onBack}
         className="w-full text-center text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
       >
         ← Cambiar método de pago
+      </button>
+    </div>
+  );
+}
+
+/**
+ * C2P / OTP-debit interactive flow: collect the payer's cédula/teléfono/banco, request
+ * the bank OTP, then submit the code to authorize the debit in real time. Self-contained —
+ * it drives the request-otp / confirm-otp endpoints and signals `onDone` once settled.
+ */
+function OtpForm({
+  token,
+  onDone,
+  setError,
+}: {
+  token: string;
+  onDone: () => void;
+  setError: (err: string | null) => void;
+}) {
+  const [cedula, setCedula] = useState('');
+  const [phone, setPhone] = useState('');
+  const [bank, setBank] = useState('');
+  const [otp, setOtp] = useState('');
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const request = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await checkoutApi.requestOtp(token, { cedula, phone, bank });
+      setSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, cedula, phone, bank, setError]);
+
+  const confirm = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.confirmOtp(token, otp.trim());
+      if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+        onDone();
+      } else {
+        setError('La clave OTP no es válida. Verifícala e intenta de nuevo.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, otp, onDone, setError]);
+
+  const inputClass =
+    'w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]';
+
+  if (!sent) {
+    return (
+      <div className="space-y-3">
+        <input value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="Cédula (ej. V-12345678)" className={inputClass} />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono (ej. 0412-1234567)" inputMode="tel" className={inputClass} />
+        <input value={bank} onChange={(e) => setBank(e.target.value)} placeholder="Banco (ej. 0172)" className={inputClass} />
+        <button
+          type="button"
+          disabled={busy || cedula.trim().length < 5 || phone.trim().length < 7}
+          onClick={request}
+          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+          style={{ background: 'var(--gradient-brand)' }}
+        >
+          {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+          Solicitar clave OTP
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="block space-y-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+          Clave OTP
+        </span>
+        <input
+          value={otp}
+          onChange={(e) => setOtp(e.target.value)}
+          placeholder="Ej. 123456"
+          inputMode="numeric"
+          className={inputClass}
+        />
+        <span className="text-[11px] text-[var(--text-subtle)]">
+          Ingresa la clave que tu banco te envió para autorizar el débito.
+        </span>
+      </label>
+      <button
+        type="button"
+        disabled={busy || otp.trim().length < 4}
+        onClick={confirm}
+        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+        style={{ background: 'var(--gradient-brand)' }}
+      >
+        {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+        Autorizar pago
       </button>
     </div>
   );

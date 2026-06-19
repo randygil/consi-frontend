@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Copy, ExternalLink, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,14 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatMoney } from '@/lib/format';
+import { DEFAULT_METHODS, METHOD_CATEGORIES } from '@/lib/payment-methods';
 import type { Currency, PaymentLinkSummary, PaymentMethod } from '@/lib/types';
 
-const METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'PAGO_MOVIL', label: 'Pago Móvil' },
-  { value: 'TRANSFER', label: 'Transferencia' },
-  { value: 'USDT', label: 'USDT' },
-  { value: 'CARD', label: 'Tarjeta' },
-];
 const CURRENCIES: Currency[] = ['USD', 'VES'];
 
 const LINK_STATUS_LABEL: Record<string, string> = {
@@ -32,7 +28,7 @@ export default function LinksPage() {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD');
   const [description, setDescription] = useState('');
-  const [methods, setMethods] = useState<PaymentMethod[]>(['PAGO_MOVIL', 'TRANSFER', 'USDT', 'CARD']);
+  const [methods, setMethods] = useState<PaymentMethod[]>(DEFAULT_METHODS);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -130,28 +126,75 @@ export default function LinksPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Métodos de pago</Label>
-                <div className="flex flex-wrap gap-2">
-                  {METHODS.map((m) => {
-                    const on = methods.includes(m.value);
-                    return (
-                      <button
-                        key={m.value}
-                        type="button"
-                        onClick={() => toggleMethod(m.value)}
-                        className={
-                          on
-                            ? 'inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--blue-400)] bg-[var(--blue-50)] px-3.5 py-1.5 text-[13px] font-bold text-[var(--blue-700)]'
-                            : 'inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-150)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--text-muted)] hover:border-[var(--blue-300)]'
-                        }
-                      >
-                        {on ? <Check size={13} /> : null}
-                        {m.label}
-                      </button>
-                    );
-                  })}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <Label>Métodos de pago</Label>
+                  <Link
+                    href="/methods"
+                    className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
+                  >
+                    ¿Qué significa cada uno?
+                  </Link>
                 </div>
+                {METHOD_CATEGORIES.map(({ category, methods: catMethods }) => (
+                  <div key={category} className="space-y-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--text-subtle)]">
+                      {category}
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {catMethods.map((m) => {
+                        const on = methods.includes(m.key);
+                        const Icon = m.icon;
+                        return (
+                          <button
+                            key={m.key}
+                            type="button"
+                            onClick={() => toggleMethod(m.key)}
+                            className={
+                              on
+                                ? 'flex items-start gap-2.5 rounded-[var(--radius-sm)] border border-[var(--blue-400)] bg-[var(--blue-50)] p-3 text-left'
+                                : 'flex items-start gap-2.5 rounded-[var(--radius-sm)] border border-[var(--ink-150)] p-3 text-left hover:border-[var(--blue-300)]'
+                            }
+                          >
+                            <span
+                              className={
+                                on
+                                  ? 'mt-0.5 text-[var(--blue-700)]'
+                                  : 'mt-0.5 text-[var(--text-subtle)]'
+                              }
+                            >
+                              <Icon size={18} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1.5">
+                                <span
+                                  className={
+                                    on
+                                      ? 'text-[13px] font-bold text-[var(--blue-700)]'
+                                      : 'text-[13px] font-bold text-[var(--text-strong)]'
+                                  }
+                                >
+                                  {m.label}
+                                </span>
+                                {m.badge ? (
+                                  <span className="rounded-[var(--radius-pill)] bg-[var(--success-100)] px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-[var(--success-600)]">
+                                    {m.badge}
+                                  </span>
+                                ) : null}
+                                {on ? (
+                                  <Check size={13} className="ml-auto text-[var(--blue-700)]" />
+                                ) : null}
+                              </span>
+                              <span className="mt-0.5 block text-[11px] leading-snug text-[var(--text-muted)]">
+                                {m.tagline}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {error ? <p className="text-sm text-[var(--danger-600)]">{error}</p> : null}

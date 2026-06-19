@@ -265,4 +265,40 @@ export const api = {
     }
     return body.data as Dispute;
   },
+
+  // ---- Authentication & Profile ----
+  forgotPassword: (email: string) =>
+    request<{ resetToken: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (input: { token: string; password: string }) =>
+    request<{ success: boolean }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateProfile: (input: { email?: string; password?: string }) =>
+    request<AuthUser>('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  getMe: () => request<any>('/auth/me'),
+
+  // ---- Admin User CRUD ----
+  adminGetUsers: () => request<any[]>('/admin/users'),
+  adminGetUser: (id: string) => request<any>(`/admin/users/${id}`),
+  adminCreateUser: (input: any) =>
+    request<any>('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  adminUpdateUser: (id: string, input: any) =>
+    request<any>(`/admin/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  adminDeleteUser: (id: string) =>
+    request<{ success: boolean }>(`/admin/users/${id}`, {
+      method: 'DELETE',
+    }),
 };

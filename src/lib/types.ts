@@ -105,7 +105,7 @@ export interface ExchangeRate {
   createdAt: string;
 }
 
-export type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFER' | 'USDT' | 'CARD';
+export type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFER' | 'USDT' | 'CARD' | 'OTP_DEBIT' | 'C2P' | 'ZELLE';
 export type PaymentLinkStatus = 'ACTIVE' | 'PAID' | 'EXPIRED' | 'CANCELLED';
 
 /** Public payload powering the hosted checkout page at /c/{token}. No secrets. */

@@ -738,7 +738,7 @@ const ENDPOINTS: EndpointMeta[] = [
         name: "methods",
         type: "array<PaymentMethod>",
         required: false,
-        desc: "Métodos habilitados: CARD, PAGO_MOVIL, USDT. Por defecto todos los disponibles.",
+        desc: "Métodos habilitados: PAGO_MOVIL, C2P, TRANSFER, CARD, USDT, ZELLE. Por defecto todos los disponibles. Ver la sección Métodos de pago del panel para el detalle de cada uno.",
       },
       {
         name: "successUrl",

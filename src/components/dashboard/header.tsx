@@ -1,6 +1,7 @@
 'use client';
 
-import { Bell, Menu } from 'lucide-react';
+import { Bell, Menu, User } from 'lucide-react';
+import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 
 function initials(name: string | undefined): string {
@@ -49,6 +50,16 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
       </div>
 
       <div className="flex items-center gap-3.5">
+        {/* Profile */}
+        <Link
+          href="/profile"
+          aria-label="Mi Perfil"
+          title="Mi Perfil"
+          className="flex size-[38px] items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
+        >
+          <User size={18} />
+        </Link>
+
         {/* Notifications */}
         <button
           type="button"

@@ -42,6 +42,9 @@ function Shell({ children }: { children: React.ReactNode }) {
               ← Admin
             </Link>
           ) : null}
+          <Link href="/ops/profile" className="font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)]">
+            Mi Perfil
+          </Link>
           <span className="text-[var(--text-subtle)]">{user.email}</span>
           <button onClick={logout} className="font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)]">
             Salir

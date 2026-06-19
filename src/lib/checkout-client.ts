@@ -52,4 +52,22 @@ export const checkoutApi = {
       `/${token}/confirm-auto`,
       { method: 'POST', body: JSON.stringify({ phone }) },
     ),
+  /** C2P / OTP-debit step 1: ask the payer's bank to send the one-time code. */
+  requestOtp: (token: string, payer: { cedula?: string; phone?: string; bank?: string }) =>
+    request<{ status: string; message?: string }>(`/${token}/request-otp`, {
+      method: 'POST',
+      body: JSON.stringify(payer),
+    }),
+  /** C2P / OTP-debit step 2: validate the code and settle the charge. */
+  confirmOtp: (token: string, otp: string) =>
+    request<{ status: string; transactionStatus: string | null }>(`/${token}/confirm-otp`, {
+      method: 'POST',
+      body: JSON.stringify({ otp }),
+    }),
+  /** Auto-confirm a Zelle transfer by the sender's email. */
+  confirmZelle: (token: string, email: string) =>
+    request<{ status: string; transactionStatus: string | null; reference: string | null }>(
+      `/${token}/confirm-zelle`,
+      { method: 'POST', body: JSON.stringify({ email }) },
+    ),
 };

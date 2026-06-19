@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '@/components/auth-provider';
 import { AdminSidebar } from '@/components/admin/sidebar';
-import { Menu } from 'lucide-react';
+import Link from 'next/link';
+import { Menu, User } from 'lucide-react';
 
 function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth();
@@ -36,16 +37,26 @@ function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           </p>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={logout}
-        title="Cerrar sesión"
-        aria-label="Cerrar sesión"
-        className="flex size-[38px] items-center justify-center rounded-full text-[13px] font-bold text-white"
-        style={{ background: 'var(--gradient-warm)' }}
-      >
-        A
-      </button>
+      <div className="flex items-center gap-3">
+        <Link
+          href="/admin/profile"
+          aria-label="Mi Perfil"
+          title="Mi Perfil"
+          className="flex size-[38px] items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
+        >
+          <User size={18} />
+        </Link>
+        <button
+          type="button"
+          onClick={logout}
+          title="Cerrar sesión"
+          aria-label="Cerrar sesión"
+          className="flex size-[38px] items-center justify-center rounded-full text-[13px] font-bold text-white"
+          style={{ background: 'var(--gradient-warm)' }}
+        >
+          A
+        </button>
+      </div>
     </header>
   );
 }
