@@ -9,6 +9,8 @@ import type {
   AuthUser,
   BankAccount,
   Currency,
+  Customer,
+  CustomerInput,
   AccountMovement,
   AdminGateway,
   ConsiAccount,
@@ -133,6 +135,21 @@ export const api = {
     request<Transaction>(`/transactions/${id}/capture`, { method: 'POST' }),
   voidTransaction: (id: string) =>
     request<Transaction>(`/transactions/${id}/void`, { method: 'POST' }),
+
+  // ---- Customers (payers) ----
+  getCustomers: (params: { search?: string; take?: number; skip?: number } = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)]),
+    ).toString();
+    return request<{ data: Customer[]; total: number }>(`/customers${qs ? `?${qs}` : ''}`);
+  },
+  getCustomer: (id: string) => request<Customer>(`/customers/${id}`),
+  getCustomerTransactions: (id: string) =>
+    request<Transaction[]>(`/customers/${id}/transactions`),
+  createCustomer: (input: CustomerInput) =>
+    request<Customer>('/customers', { method: 'POST', body: JSON.stringify(input) }),
+  updateCustomer: (id: string, input: CustomerInput) =>
+    request<Customer>(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
 
   getSettlementsPending: () => request<Transaction[]>('/settlements/pending'),
   runSettlement: () =>

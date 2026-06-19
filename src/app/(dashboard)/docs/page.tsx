@@ -683,7 +683,13 @@ const ENDPOINTS: EndpointMeta[] = [
         name: "customerName",
         type: "string",
         required: false,
-        desc: "Nombre del pagador (máx. 120 caracteres).",
+        desc: "Nombre del pagador (máx. 120 caracteres). Heredado; preferir customer.",
+      },
+      {
+        name: "customer",
+        type: "object",
+        required: false,
+        desc: "Datos del pagador para registrarlo como cliente: { firstName, lastName, email (obligatorios), phone, address, country, cedula }. La cédula es OBLIGATORIA para cobros en VES (métodos venezolanos); para USD/USDT los datos son opcionales. Se deduplica por correo: reenviar el mismo email actualiza al cliente existente.",
       },
       {
         name: "description",
@@ -903,7 +909,12 @@ export default function DocsPage() {
     "order": "orden_101",
     "amount": "150.00",
     "currency": "USD",
-    "customerName": "Juan Pérez",
+    "customer": {
+      "firstName": "Juan",
+      "lastName": "Pérez",
+      "email": "juan.perez@example.com",
+      "cedula": "V-12345678"
+    },
     "description": "Pago de Factura #101"
   }'`,
       js: `const crypto = require('crypto');
@@ -925,7 +936,14 @@ fetch('http://localhost:4000/api/payment', {
   },
   body: JSON.stringify({
     order, amount, currency,
-    customerName: 'Juan Pérez',
+    // Datos del pagador. La cédula es obligatoria para cobros en VES.
+    customer: {
+      firstName: 'Juan',
+      lastName: 'Pérez',
+      email: 'juan.perez@example.com',
+      cedula: 'V-12345678',
+      phone: '04141234567'
+    },
     description: 'Pago de Factura #101'
   })
 })
@@ -954,7 +972,12 @@ body = {
     "order": order,
     "amount": amount,
     "currency": currency,
-    "customerName": "Juan Pérez",
+    "customer": {
+        "firstName": "Juan",
+        "lastName": "Pérez",
+        "email": "juan.perez@example.com",
+        "cedula": "V-12345678"  # obligatoria para VES
+    },
     "description": "Pago de Factura #101"
 }
 
@@ -982,7 +1005,12 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
     'order' => $order,
     'amount' => $amount,
     'currency' => $currency,
-    'customerName' => 'Juan Pérez',
+    'customer' => [
+        'firstName' => 'Juan',
+        'lastName' => 'Pérez',
+        'email' => 'juan.perez@example.com',
+        'cedula' => 'V-12345678'  // obligatoria para VES
+    ],
     'description' => 'Pago de Factura #101'
 ]));
 

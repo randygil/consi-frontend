@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { FileSpreadsheet, FileText } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badge';
@@ -169,6 +170,7 @@ export default function TransactionsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Referencia</TableHead>
+                <TableHead>Cliente</TableHead>
                 <TableHead>Gateway</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Comisión</TableHead>
@@ -186,6 +188,18 @@ export default function TransactionsPage() {
               ) : rows.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="font-mono text-xs">{t.reference.slice(0, 14)}</TableCell>
+                  <TableCell>
+                    {t.customerId ? (
+                      <Link
+                        href={`/customers/${t.customerId}`}
+                        className="font-medium text-[var(--blue-700)] hover:underline"
+                      >
+                        {t.customerName ?? 'Ver cliente'}
+                      </Link>
+                    ) : (
+                      <span className="text-[var(--muted-foreground)]">{t.customerName ?? '—'}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-[var(--muted-foreground)]">{t.provider ?? '—'}</TableCell>
                   <TableCell>{formatMoney(t.amount, t.currency)}</TableCell>
                   <TableCell className="text-[var(--muted-foreground)]">

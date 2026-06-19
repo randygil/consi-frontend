@@ -4,6 +4,7 @@ import type {
   ApiResponse,
   CheckoutData,
   CheckoutStatus,
+  CustomerInput,
   PayResult,
   PaymentMethod,
 } from './types';
@@ -26,13 +27,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const checkoutApi = {
   get: (token: string) => request<CheckoutData>(`/${token}`),
-  pay: (token: string, method: PaymentMethod, cardToken?: string, customerName?: string) =>
+  pay: (token: string, method: PaymentMethod, cardToken?: string, customer?: CustomerInput) =>
     request<PayResult>(`/${token}/pay`, {
       method: 'POST',
       body: JSON.stringify({
         method,
         ...(cardToken ? { cardToken } : {}),
-        ...(customerName ? { customerName } : {}),
+        ...(customer ? { customer } : {}),
       }),
     }),
   status: (token: string) => request<CheckoutStatus>(`/${token}/status`),

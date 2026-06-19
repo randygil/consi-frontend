@@ -18,9 +18,41 @@ import { checkoutApi } from '@/lib/checkout-client';
 import { formatMoney } from '@/lib/format';
 import type {
   CheckoutData,
+  Currency,
+  CustomerInput,
   PaymentInstructions,
   PaymentMethod,
 } from '@/lib/types';
+
+type CustomerForm = { firstName: string; lastName: string; email: string; cedula: string };
+
+/**
+ * Validate the payer details and build the customer payload. Cédula + full data are
+ * required for VES (Venezuelan) methods; for USD they're optional. Returns an error
+ * message or the (possibly undefined) customer to send.
+ */
+function resolveCustomer(
+  c: CustomerForm,
+  currency?: Currency,
+): { error: string } | { customer?: CustomerInput } {
+  if (currency === 'VES') {
+    if (!c.firstName.trim() || !c.lastName.trim() || !c.email.trim())
+      return { error: 'Ingresa tu nombre, apellido y correo' };
+    if (!c.cedula.trim())
+      return { error: 'La cédula es obligatoria para pagos en bolívares' };
+  }
+  const has = c.firstName || c.lastName || c.email || c.cedula;
+  return {
+    customer: has
+      ? {
+          firstName: c.firstName.trim(),
+          lastName: c.lastName.trim(),
+          email: c.email.trim(),
+          cedula: c.cedula.trim() || undefined,
+        }
+      : undefined,
+  };
+}
 
 const METHOD_ICON: Record<PaymentMethod, React.ReactNode> = {
   PAGO_MOVIL: <Smartphone size={20} />,
@@ -46,6 +78,12 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false);
   const [show3ds, setShow3ds] = useState(false);
   const [loading3ds, setLoading3ds] = useState(false);
+  const [customer, setCustomer] = useState<CustomerForm>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    cedula: '',
+  });
 
   useEffect(() => {
     // Always start at method selection. Links are reusable, so a previously-paid
@@ -72,9 +110,15 @@ export default function CheckoutPage() {
 
   const choose = useCallback(
     async (m: PaymentMethod) => {
+      const resolved = resolveCustomer(customer, data?.currency);
+      if ('error' in resolved) {
+        setError(resolved.error);
+        return;
+      }
       if (m === 'CARD') {
         // Skip direct payment creation for card method: we transition directly to instructions (interactive form)
-        // and only create/tokenize when they click pay.
+        // and only create/tokenize when they click pay. The payer data captured above
+        // persists in state and is sent at tokenize time.
         setInstructions({
           method: 'CARD',
           label: 'Tarjeta de Crédito',
@@ -88,7 +132,7 @@ export default function CheckoutPage() {
       setBusy(true);
       setError(null);
       try {
-        const res = await checkoutApi.pay(token, m);
+        const res = await checkoutApi.pay(token, m, undefined, resolved.customer);
         setInstructions(res.instructions);
         setStep('instructions');
       } catch (e) {
@@ -97,14 +141,19 @@ export default function CheckoutPage() {
         setBusy(false);
       }
     },
-    [token],
+    [token, customer, data],
   );
 
   const onTokenizeSuccess = useCallback(async (cardToken: string) => {
+    const resolved = resolveCustomer(customer, data?.currency);
+    if ('error' in resolved) {
+      setError(resolved.error);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const res = await checkoutApi.pay(token, 'CARD', cardToken);
+      const res = await checkoutApi.pay(token, 'CARD', cardToken, resolved.customer);
       if (res.status === 'AUTHORIZED') {
         setShow3ds(true);
       } else {
@@ -115,7 +164,7 @@ export default function CheckoutPage() {
     } finally {
       setBusy(false);
     }
-  }, [token]);
+  }, [token, customer, data]);
 
   const confirm = useCallback(async () => {
     setBusy(true);
@@ -195,6 +244,38 @@ export default function CheckoutPage() {
       {step === 'method' && (
         <div className="space-y-2.5">
           <p className="text-[13px] font-semibold text-[var(--text-muted)]">
+            Tus datos{data.currency === 'VES' ? '' : ' (opcional)'}
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <input
+              value={customer.firstName}
+              onChange={(e) => setCustomer({ ...customer, firstName: e.target.value })}
+              placeholder="Nombre"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+            />
+            <input
+              value={customer.lastName}
+              onChange={(e) => setCustomer({ ...customer, lastName: e.target.value })}
+              placeholder="Apellido"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+            />
+          </div>
+          <input
+            type="email"
+            value={customer.email}
+            onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+            placeholder="Correo electrónico"
+            className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+          />
+          {data.currency === 'VES' && (
+            <input
+              value={customer.cedula}
+              onChange={(e) => setCustomer({ ...customer, cedula: e.target.value })}
+              placeholder="Cédula / RIF (ej. V-12345678)"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+            />
+          )}
+          <p className="pt-1 text-[13px] font-semibold text-[var(--text-muted)]">
             Elige cómo pagar
           </p>
           {data.methods.map((m) => (

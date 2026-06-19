@@ -46,6 +46,8 @@ export interface Transaction {
   usdEquivalent: string | null;
   reference: string;
   customerName: string | null;
+  customerId?: string | null;
+  customer?: Customer | null;
   description: string | null;
   createdAt: string;
   feeAmount?: string | null;
@@ -57,6 +59,33 @@ export interface Transaction {
   expiresAt?: string | null;
   provider?: string | null;
   order?: string | null;
+}
+
+/** A registered payer of the merchant. email + name required; cédula for VES methods. */
+export interface Customer {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  address: string | null;
+  country: string | null;
+  cedula: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  transactions?: Transaction[];
+  _count?: { transactions: number };
+}
+
+/** Editable customer fields (dashboard create/edit). */
+export interface CustomerInput {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  address?: string;
+  country?: string;
+  cedula?: string;
 }
 
 export interface MerchantProfile {
