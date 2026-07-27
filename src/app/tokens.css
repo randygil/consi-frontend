@@ -56,8 +56,13 @@
   --color-bad: oklch(51% 0.19 27);
   --color-bad-soft: oklch(94% 0.04 25);
 
-  /* ---- Code (graphite cards) ---- */
-  --color-tok-str: oklch(80% 0.11 155); /* JSON response bodies */
+  /* ---- Code (graphite cards) ----
+   * Graphite is dark in BOTH themes, so these live in :root only. Five roles is
+   * the whole syntax palette: anything more turns a code card into a fruit bowl. */
+  --color-tok-str: oklch(80% 0.11 155); /* strings, JSON response bodies */
+  --color-tok-key: oklch(74% 0.16 254); /* keywords, properties — cobalt on graphite */
+  --color-tok-num: oklch(83% 0.09 75); /* numbers, booleans, constants */
+  --color-tok-com: oklch(58% 0.012 254); /* comments + punctuation */
 
   /* ---- Overlay ---- */
   --color-scrim: oklch(15% 0.01 260 / 0.45);

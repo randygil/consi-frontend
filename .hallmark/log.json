@@ -1,6 +1,19 @@
 [
   {
     "date": "2026-07-27",
+    "scope": "page",
+    "macrostructure": "21 Component Playground (docs family)",
+    "theme": "Cobalt",
+    "theme_axes": "cool-light + graphite-dark / grotesk-sans / electric-cobalt",
+    "genre": "modern-minimal",
+    "nav": "in-page section index — rail at lg, scroll strip below; app nav unchanged",
+    "footer": "none (dashboard surface)",
+    "enrichment": "graphite request/response panel + code cards only",
+    "design_system": "design.md",
+    "brief": "Consi · /docs + /developers onto Cobalt as a conventional gateway reference: index/prose/sticky request-response, no fake terminal chrome, hash deep links, snippets from live test credentials"
+  },
+  {
+    "date": "2026-07-27",
     "scope": "app",
     "macrostructure": "Workbench (app) / Component Playground (docs) / Stat-Led (focused)",
     "theme": "Cobalt",

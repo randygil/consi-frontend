@@ -1,54 +1,64 @@
 'use client';
 
-import { Copy, Eye, EyeOff, RefreshCw, Key, Terminal, Code2, Check, ArrowRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+/* Hallmark · genre: modern-minimal · macrostructure: 21 Component Playground
+ * design-system: design.md · designed-as-app · theme: Cobalt (light + dark)
+ * The credentials half of the docs family: keys, webhook endpoint, delivery log.
+ */
+
+import { ArrowRight, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { CopyButton } from '@/components/developers/copy-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Notice, PageHead } from '@/components/ui/page-head';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { ApiKeys, WebhookDelivery } from '@/lib/types';
 
-function CopyButton({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      className="size-8 rounded-md hover:bg-[var(--blue-50)] hover:text-[var(--blue-700)] transition-colors"
-      onClick={() => {
-        navigator.clipboard.writeText(value);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-      aria-label={`Copiar ${label}`}
-    >
-      {copied ? <Check size={14} className="text-[var(--success-600)]" /> : <Copy size={14} />}
-    </Button>
-  );
-}
-
-function SecretRow({ label, value, secret = false }: { label: string; value: string; secret?: boolean }) {
+/** A key is a value you read, copy, and occasionally hide — not a form field. */
+function SecretRow({
+  label,
+  value,
+  secret = false,
+}: {
+  label: string;
+  value: string;
+  secret?: boolean;
+}) {
   const [revealed, setRevealed] = useState(false);
-  const display = secret && !revealed ? '•'.repeat(Math.min(value.length, 32)) : value;
+  const masked = secret && !revealed;
+
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">{label}</Label>
-      <div className="flex gap-2">
-        <Input readOnly value={display} className="font-mono text-xs bg-[var(--ink-50)] border-[var(--border)] focus:ring-1 focus:ring-[var(--blue-400)]" />
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Label>{label}</Label>
+      <div className="flex gap-[var(--space-2xs)]">
+        <Input
+          readOnly
+          value={masked ? '•'.repeat(Math.min(value.length, 32)) : value}
+          className="num text-[length:var(--text-sm)]"
+        />
         {secret ? (
           <Button
             type="button"
             variant="outline"
             size="icon"
+            className="size-9 shrink-0"
             onClick={() => setRevealed((r) => !r)}
             aria-label={revealed ? `Ocultar ${label}` : `Mostrar ${label}`}
           >
-            {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
+            {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
           </Button>
         ) : null}
         <CopyButton value={value} label={label} />
@@ -57,11 +67,21 @@ function SecretRow({ label, value, secret = false }: { label: string; value: str
   );
 }
 
+const DELIVERY_TONE: Record<string, string> = {
+  DELIVERED: 'text-[var(--color-ok)] bg-[var(--color-ok-soft)]',
+  FAILED: 'text-[var(--color-bad)] bg-[var(--color-bad-soft)]',
+};
+const DELIVERY_LABEL: Record<string, string> = {
+  DELIVERED: 'Entregado',
+  FAILED: 'Fallido',
+};
+
 export default function DevelopersPage() {
   const [keys, setKeys] = useState<ApiKeys | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const load = () =>
     api.getApiKeys().then((k) => {
@@ -71,159 +91,185 @@ export default function DevelopersPage() {
 
   useEffect(() => {
     load();
-    api.getWebhookDeliveries().then(setDeliveries).catch(() => setDeliveries([]));
+    api
+      .getWebhookDeliveries()
+      .then(setDeliveries)
+      .catch(() => setDeliveries([]));
   }, []);
 
+  function flash(message: string) {
+    setStatus(message);
+    setTimeout(() => setStatus(null), 3000);
+  }
+
   async function regenerate(environment: 'TEST' | 'LIVE') {
+    if (!window.confirm(`Regenerar la clave ${environment} invalida la actual. ¿Continuar?`)) return;
     const updated = await api.regenerateApiKey(environment);
     setKeys((prev) => (prev ? { ...prev, ...updated } : prev));
-    setStatus(`Clave ${environment} regenerada`);
-    setTimeout(() => setStatus(null), 3000);
+    flash(`Clave ${environment} regenerada`);
   }
 
   async function saveWebhook(e: React.FormEvent) {
     e.preventDefault();
-    await api.updateWebhook(webhookUrl);
-    setStatus('Webhook URL actualizada');
-    setTimeout(() => setStatus(null), 3000);
+    setSaving(true);
+    try {
+      await api.updateWebhook(webhookUrl);
+      flash('Endpoint de webhook actualizado');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-strong)] flex items-center gap-2">
-            <Code2 className="text-[var(--blue-500)]" />
-            <span>Desarrolladores</span>
-          </h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            Accede a tus credenciales de API y configura tus webhooks. ¿Cómo integrar?{' '}
-            <Link href="/docs" className="font-bold text-[var(--blue-700)] hover:underline">Ver Documentación de API</Link>.
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Desarrolladores"
+        lede="Tus credenciales de API y el endpoint donde Consi te notifica cada cambio de estado."
+        action={
+          <Link href="/docs" className="text-[length:var(--text-sm)] text-[var(--color-accent)] hover:underline">
+            Ver documentación →
+          </Link>
+        }
+      />
+
+      {status ? <Notice kind="ok">{status}</Notice> : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Credenciales</CardTitle>
+          <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+            La <span className="num">key</span> identifica al comercio; el{' '}
+            <span className="num">secret</span> firma las peticiones y no debe salir de tu
+            servidor.
           </p>
-        </div>
-      </div>
-
-      {status ? (
-        <div className="p-3 rounded-lg bg-[var(--success-100)] text-[var(--success-600)] text-xs font-bold">
-          {status}
-        </div>
-      ) : null}
-
-      <div className="space-y-6">
-        <Card className="border-[var(--border)] shadow-[var(--shadow-sm)]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
-              <Key size={16} className="text-[var(--blue-500)]" />
-              <span>Credenciales de API</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {keys ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <SecretRow label="API Key (Test)" value={keys.apiKeyTest} />
-                  <SecretRow label="API Secret (Test)" value={keys.apiSecretTest} secret />
-                  <SecretRow label="API Key (Live)" value={keys.apiKeyLive} />
-                  <SecretRow label="API Secret (Live)" value={keys.apiSecretLive} secret />
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" onClick={() => regenerate('TEST')} className="text-xs">
-                    <RefreshCw size={14} className="mr-1.5" /> Regenerar Test
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => regenerate('LIVE')} className="text-xs">
-                    <RefreshCw size={14} className="mr-1.5" /> Regenerar Live
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-[var(--muted-foreground)]">Cargando credenciales…</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-[var(--border)] shadow-[var(--shadow-sm)]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
-              <Terminal size={16} className="text-[var(--blue-500)]" />
-              <span>Configuración de Webhook</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={saveWebhook} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="webhook" className="text-xs font-bold text-[var(--text-strong)]">URL del Webhook de tu Servidor</Label>
-                <Input
-                  id="webhook"
-                  type="url"
-                  placeholder="https://tu-servidor.com/webhooks/consi"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  className="max-w-xl font-mono text-sm border-[var(--border)]"
-                />
-                <p className="text-xs text-[var(--text-subtle)]">
-                  Consi enviará peticiones HTTP POST firmadas con eventos del estado de las transacciones (ej. <code className="bg-[var(--ink-100)] px-1 rounded">transaction.completed</code>) a este endpoint.
-                </p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-[var(--space-sm)]">
+          {keys ? (
+            <>
+              <div className="grid gap-[var(--space-sm)] md:grid-cols-2">
+                <SecretRow label="API Key · Test" value={keys.apiKeyTest} />
+                <SecretRow label="API Secret · Test" value={keys.apiSecretTest} secret />
+                <SecretRow label="API Key · Live" value={keys.apiKeyLive} />
+                <SecretRow label="API Secret · Live" value={keys.apiSecretLive} secret />
               </div>
-              <Button type="submit" className="text-xs font-bold px-4 py-2">Guardar Endpoint</Button>
-            </form>
-          </CardContent>
-        </Card>
+              <div className="flex flex-wrap gap-[var(--space-2xs)]">
+                <Button variant="outline" size="sm" onClick={() => regenerate('TEST')}>
+                  <RefreshCw size={14} /> Regenerar Test
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => regenerate('LIVE')}>
+                  <RefreshCw size={14} /> Regenerar Live
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="label">Cargando credenciales</p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card className="border-[var(--border)] shadow-[var(--shadow-sm)]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
-              <ArrowRight size={16} className="text-[var(--blue-500)]" />
-              <span>Historial de Entregas de Webhook</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table className="border border-[var(--border)] rounded-xl overflow-hidden">
-              <TableHeader className="bg-[var(--ink-50)]">
+      <Card>
+        <CardHeader>
+          <CardTitle>Endpoint de webhook</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={saveWebhook} className="flex flex-col gap-[var(--space-xs)]">
+            <div className="flex max-w-xl flex-col gap-1.5">
+              <Label htmlFor="webhook">URL de tu servidor</Label>
+              <Input
+                id="webhook"
+                type="url"
+                placeholder="https://tu-servidor.com/webhooks/consi"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="num text-[length:var(--text-sm)]"
+              />
+              <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                Consi enviará un <span className="num">POST</span> firmado con cada cambio de
+                estado —{' '}
+                <Link href="/docs#webhooks" className="text-[var(--color-accent)] hover:underline">
+                  cómo verificar la firma
+                </Link>
+                .
+              </p>
+            </div>
+            <div>
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Guardando…' : 'Guardar endpoint'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Entregas recientes</CardTitle>
+          <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+            Cada intento de notificación, con su último error si lo hubo.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Evento</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Intentos</TableHead>
+                <TableHead>Último error</TableHead>
+                <TableHead>Fecha</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deliveries.length === 0 ? (
                 <TableRow>
-                  <TableHead className="font-bold text-[var(--text-strong)]">Evento</TableHead>
-                  <TableHead className="font-bold text-[var(--text-strong)]">Estado</TableHead>
-                  <TableHead className="font-bold text-[var(--text-strong)]">Intentos</TableHead>
-                  <TableHead className="font-bold text-[var(--text-strong)]">Último error</TableHead>
-                  <TableHead className="font-bold text-[var(--text-strong)]">Fecha</TableHead>
+                  <TableCell colSpan={5} className="py-[var(--space-md)] text-center">
+                    <span className="label">Sin notificaciones enviadas aún</span>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {deliveries.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-[var(--text-subtle)] font-medium">
-                      Sin notificaciones enviadas aún
+              ) : (
+                deliveries.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="num whitespace-nowrap text-[var(--color-ink)]">
+                      {d.event}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] px-1.5 py-0.5',
+                          'font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)]',
+                          DELIVERY_TONE[d.status] ??
+                            'text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
+                        )}
+                      >
+                        <span className="size-1.5 rounded-full bg-current" aria-hidden />
+                        {DELIVERY_LABEL[d.status] ?? 'Pendiente'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="num whitespace-nowrap">
+                      {d.attempts}/{d.maxAttempts}
+                    </TableCell>
+                    <TableCell className="num max-w-xs truncate text-[length:var(--text-2xs)] text-[var(--color-ink-3)]">
+                      {d.lastError ?? '—'}
+                    </TableCell>
+                    <TableCell className="num whitespace-nowrap text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                      {formatDate(d.createdAt)}
                     </TableCell>
                   </TableRow>
-                ) : (
-                  deliveries.map((d) => (
-                    <TableRow key={d.id} className="hover:bg-[var(--ink-50)] transition-colors">
-                      <TableCell className="font-mono text-xs font-semibold">{d.event}</TableCell>
-                      <TableCell>
-                        <span
-                          className={
-                            d.status === 'DELIVERED'
-                              ? 'inline-flex items-center rounded-full bg-[var(--success-100)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--success-600)]'
-                              : d.status === 'FAILED'
-                                ? 'inline-flex items-center rounded-full bg-[var(--danger-100)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--danger-600)]'
-                                : 'inline-flex items-center rounded-full bg-[var(--warning-100)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--warning-600)]'
-                          }
-                        >
-                          {d.status === 'DELIVERED' ? 'Completado' : d.status === 'FAILED' ? 'Fallido' : 'Pendiente'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs font-semibold text-[var(--text-strong)]">{d.attempts}/{d.maxAttempts}</TableCell>
-                      <TableCell className="max-w-xs truncate text-[var(--text-muted)] text-xs font-mono">
-                        {d.lastError ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-[var(--text-subtle)] text-xs">{formatDate(d.createdAt)}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <p className="flex items-center gap-1.5 text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+        <ArrowRight size={14} className="text-[var(--color-accent)]" />
+        ¿Primera integración? Empieza por{' '}
+        <Link href="/docs#intro" className="text-[var(--color-accent)] hover:underline">
+          la documentación
+        </Link>
+        .
+      </p>
     </div>
   );
 }

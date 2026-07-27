@@ -3,23 +3,36 @@
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-export function CopyButton({ value, label }: { value: string; label: string }) {
+/**
+ * Silent success: the icon swaps to a check for 1.2s and reverts. No toast,
+ * no colour flash on the button itself — design.md's microinteraction stance.
+ */
+export function CopyButton({
+  value,
+  label,
+  className,
+}: {
+  value: string;
+  label: string;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
       type="button"
       variant="outline"
       size="icon"
-      className="size-8 rounded-md hover:bg-[var(--blue-50)] hover:text-[var(--blue-700)] transition-colors"
+      className={cn('size-9 shrink-0', className)}
       onClick={() => {
         navigator.clipboard.writeText(value);
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        setTimeout(() => setCopied(false), 1200);
       }}
-      aria-label={`Copiar ${label}`}
+      aria-label={copied ? `${label} copiado` : `Copiar ${label}`}
     >
-      {copied ? <Check size={14} className="text-[var(--success-600)]" /> : <Copy size={14} />}
+      {copied ? <Check size={14} className="text-[var(--color-ok)]" /> : <Copy size={14} />}
     </Button>
   );
 }

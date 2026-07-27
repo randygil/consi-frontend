@@ -88,6 +88,82 @@ h4 {
   border-top: 1px solid var(--color-rule);
 }
 
+/* ---------------------------------------------------------------------------
+ * Documentation prose.
+ *
+ * The docs column is the one place in this product that is *read*, not scanned,
+ * so it gets a real prose recipe instead of a per-element Tailwind chain. This
+ * exists so the reference page's JSX can be close to plain HTML: <p>, <ul>,
+ * <code> and <a> come out right without a className on any of them.
+ * ------------------------------------------------------------------------- */
+.doc-prose {
+  color: var(--color-ink-2);
+  font-size: var(--text-base);
+  line-height: 1.65;
+}
+
+/* Every rule below matches only UNCLASSED elements. Anything carrying a
+ * className — a card, a table, a step list, a highlighted code block — opts out
+ * by construction, so there is no .not-prose escape hatch to remember and no
+ * specificity fight with the Tailwind utilities on those nodes. */
+.doc-prose > :where(p, ul, ol):not([class]) {
+  margin-top: var(--space-xs);
+  max-width: 68ch;
+}
+
+.doc-prose > ul:not([class]) {
+  list-style: disc;
+  padding-left: 1.15rem;
+}
+.doc-prose > ol:not([class]) {
+  list-style: decimal;
+  padding-left: 1.15rem;
+}
+.doc-prose li::marker {
+  color: var(--color-ink-4);
+}
+
+.doc-prose > h2 {
+  font-size: var(--text-xl);
+}
+.doc-prose > h3 {
+  font-size: var(--text-md);
+  margin-top: var(--space-md);
+}
+.doc-prose > h2 + p,
+.doc-prose > h3 + p {
+  margin-top: var(--space-2xs);
+}
+
+.doc-prose strong {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* Inline code is a hairline chip, not a highlighter. `:not([class])` keeps this
+ * off the <code class="language-*"> that the syntax highlighter emits. */
+.doc-prose code:not([class]) {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.32em;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-xs);
+  background: var(--color-paper-3);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.doc-prose a:not([class]),
+.doc-prose button.link {
+  color: var(--color-accent);
+  text-decoration: none;
+  font: inherit;
+}
+.doc-prose a:not([class]):hover,
+.doc-prose button.link:hover {
+  text-decoration: underline;
+}
+
 /* Theme-swap damping: recolour instantly, don't cross-fade every surface. */
 .theming * {
   transition: none !important;

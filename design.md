@@ -23,6 +23,12 @@ Graphite is the one dark beat, and it is **reserved** for two focal surfaces:
 the balance readout on the dashboard, and code blocks in the docs. Graphite
 used anywhere else dilutes it into decoration.
 
+Syntax highlighting is the one place the one-signal rule bends, and it bends to
+exactly **five roles**, all tokens (`--color-tok-key` · `--color-tok-str` ·
+`--color-tok-num` · `--color-tok-com`, plus plain `--color-on-graphite`). They
+live in `:root` only, because graphite is dark in both themes. A sixth colour
+turns a code card into a fruit bowl — fold new Prism tokens into one of the five.
+
 Values live in [`src/app/tokens.css`](src/app/tokens.css) — that file is the
 source of truth, this section is the rationale.
 
@@ -74,12 +80,45 @@ Pages within a family share the family's shape and vary only in archetypes.
 | Family | Macrostructure | Routes |
 | --- | --- | --- |
 | **App** | 05 Workbench — rail + header + dense work surface | `/`, `/links`, `/transactions`, `/payouts`, `/settlements`, `/admin`, `/admin/merchants`, `/admin/merchants/new`, `/admin/merchants/[id]` |
-| **Docs** | 21 Component Playground — section index + prose + request/response | `/developers` |
+| **Docs** | 21 Component Playground — section index + prose + request/response | `/docs`, `/developers` |
 | **Focused** | 04 Stat-Led — the single figure is the hero | `/c/[token]`, `/login` |
 
-Every App-family route opens with `<PageHead>` (display title · optional lede ·
-optional action, hairline underneath). That component *is* the section rhythm —
-do not hand-roll a per-page variant.
+Every route opens with `<PageHead>` (display title · optional lede · optional
+action, hairline underneath). That component *is* the section rhythm — do not
+hand-roll a per-page variant.
+
+### The Docs family, specifically
+
+`/docs` is the reference; `/developers` is its credentials half. They share the
+`<PageHead>`, the theme, and the graphite code voice, and they cross-link.
+
+The reference page is three columns — **section index · prose · sticky
+request/response panel** — collapsing to index-strip-on-top below `lg`, and the
+panel dropping under the prose below `xl`. Rules that hold:
+
+- **Sections are shareable.** `/docs#webhooks` opens on webhooks. Section
+  switching uses `history.replaceState`, never `location.hash` — the latter
+  yanks the scroll position.
+- **The panel carries no window furniture.** Method + path on the left, language
+  tabs on the right, hairline, request, hairline, response. Traffic-light dots
+  and mock title bars are banned system-wide; a docs panel is where they creep
+  back in.
+- **Tabs follow the axis that actually varies.** REST sections switch language
+  (cURL · Node · Python · PHP); webhooks drop cURL because there is no cURL form
+  for verifying a signature you receive; the SDK section switches *framework*
+  (HTML · React · Vue) because that is what changes for a front-end integration.
+- **Snippets use the merchant's live test credentials** and an origin-derived
+  base URL, so the code on screen is the code that runs. Never a placeholder
+  where a real value is one `await` away.
+- **HTTP method is a readout, not a traffic light.** `POST` carries the accent,
+  `GET` stays muted. Two hues, not five.
+
+**Prose recipe.** The docs column is the one place in this product that is read
+rather than scanned, so it gets `.doc-prose` in `globals.css` instead of a
+per-element Tailwind chain. Every rule there matches only *unclassed direct
+children* (`.doc-prose > p:not([class])`, `.doc-prose code:not([class])`), so any
+node carrying a className opts out by construction — no `.not-prose` escape
+hatch, and no specificity fight with the utilities on cards and tables.
 
 ## Navigation
 

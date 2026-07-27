@@ -27,19 +27,32 @@ export function PageHead({
   );
 }
 
-/** Inline error / success line. Flat tint, hairline, mono prefix — no toast. */
-export function Notice({ kind, children }: { kind: 'ok' | 'err' | 'warn'; children: React.ReactNode }) {
+/**
+ * Inline error / success / advisory line. Flat tint, hairline bar, no toast.
+ * `info` is the docs' callout voice — same shape, cobalt instead of a status hue.
+ * A <div> rather than a <p> so docs callouts can hold a list or a code block.
+ */
+export function Notice({
+  kind,
+  className,
+  children,
+}: {
+  kind: 'ok' | 'err' | 'warn' | 'info';
+  className?: string;
+  children: React.ReactNode;
+}) {
   const tone = {
     ok: 'border-[var(--color-ok)] text-[var(--color-ok)] bg-[var(--color-ok-soft)]',
     err: 'border-[var(--color-bad)] text-[var(--color-bad)] bg-[var(--color-bad-soft)]',
     warn: 'border-[var(--color-warn)] text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
+    info: 'border-[var(--color-accent)] text-[var(--color-ink-2)] bg-[var(--color-accent-soft)]',
   }[kind];
   return (
-    <p
+    <div
       role={kind === 'err' ? 'alert' : 'status'}
-      className={`rounded-[var(--radius-sm)] border-l-2 px-3 py-2 text-[length:var(--text-sm)] ${tone}`}
+      className={`rounded-[var(--radius-sm)] border-l-2 px-3 py-2 text-[length:var(--text-sm)] ${tone} ${className ?? ''}`}
     >
       {children}
-    </p>
+    </div>
   );
 }

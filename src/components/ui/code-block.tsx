@@ -3,7 +3,6 @@
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface CodeBlockProps {
   code: string;
@@ -16,45 +15,104 @@ interface CodeBlockProps {
 }
 
 /**
- * Bloque de código con resaltado de sintaxis (Prism + tema One Dark) y
- * botón de copiar. Pensado para reutilizarse en la documentación de la API.
+ * Cobalt syntax palette. Five roles, all from tokens: cobalt for keywords and
+ * properties, green for strings, amber for literals, muted grey for comments
+ * and punctuation, plain ink for everything else. A sixth colour would turn a
+ * code card into a fruit bowl — if a Prism token needs a hue it doesn't have,
+ * fold it into one of these five rather than inventing a value here.
  */
-export function CodeBlock({ code, language, maxHeight = 360, showCopy = true, className }: CodeBlockProps) {
+const TOK = {
+  key: { color: 'var(--color-tok-key)' },
+  str: { color: 'var(--color-tok-str)' },
+  num: { color: 'var(--color-tok-num)' },
+  com: { color: 'var(--color-tok-com)' },
+  dim: { color: 'var(--color-on-graphite-3)' },
+} as const;
+
+const cobaltCode: Record<string, React.CSSProperties> = {
+  'code[class*="language-"]': { color: 'var(--color-on-graphite)' },
+  'pre[class*="language-"]': { color: 'var(--color-on-graphite)' },
+  comment: { ...TOK.com, fontStyle: 'italic' },
+  prolog: TOK.com,
+  doctype: TOK.com,
+  cdata: TOK.com,
+  punctuation: TOK.dim,
+  operator: TOK.dim,
+  entity: TOK.dim,
+  url: TOK.str,
+  property: TOK.key,
+  tag: TOK.key,
+  keyword: TOK.key,
+  'attr-name': TOK.key,
+  selector: TOK.key,
+  'class-name': TOK.key,
+  function: TOK.key,
+  variable: { color: 'var(--color-on-graphite)' },
+  string: TOK.str,
+  char: TOK.str,
+  'attr-value': TOK.str,
+  regex: TOK.str,
+  inserted: TOK.str,
+  boolean: TOK.num,
+  number: TOK.num,
+  constant: TOK.num,
+  symbol: TOK.num,
+  builtin: TOK.num,
+  deleted: { color: 'var(--color-bad)' },
+  important: { fontWeight: 600 },
+  bold: { fontWeight: 600 },
+};
+
+/**
+ * Bloque de código con resaltado de sintaxis y botón de copiar. Vive siempre
+ * sobre grafito — la única superficie oscura que `design.md` permite en la doc.
+ */
+export function CodeBlock({
+  code,
+  language,
+  maxHeight = 360,
+  showCopy = true,
+  className,
+}: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setTimeout(() => setCopied(false), 1200);
   };
 
   return (
-    <div className={`group relative overflow-hidden rounded-lg border border-white/5 ${className ?? ''}`}>
+    <div
+      className={`group relative overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-graphite-rule)] bg-[var(--color-graphite)] ${className ?? ''}`}
+    >
       {showCopy ? (
         <button
           type="button"
           onClick={copy}
-          aria-label="Copiar código"
-          className="absolute right-2 top-2 z-10 rounded-md border border-white/10 bg-white/5 p-1.5 text-white/70 opacity-0 backdrop-blur transition-all hover:bg-white/15 hover:text-white group-hover:opacity-100"
+          aria-label={copied ? 'Código copiado' : 'Copiar código'}
+          className="absolute right-2 top-2 z-10 rounded-[var(--radius-sm)] border border-[var(--color-graphite-rule)] bg-[var(--color-graphite-2)] p-1.5 text-[var(--color-on-graphite-2)] opacity-0 transition-[opacity,color] duration-[var(--dur-fast)] hover:text-[var(--color-on-graphite)] focus-visible:opacity-100 group-hover:opacity-100"
         >
-          {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+          {copied ? (
+            <Check size={13} className="text-[var(--color-tok-str)]" />
+          ) : (
+            <Copy size={13} />
+          )}
         </button>
       ) : null}
       <SyntaxHighlighter
         language={language}
-        style={oneDark}
+        style={cobaltCode}
         customStyle={{
           margin: 0,
           padding: '14px 16px',
           fontSize: '11.5px',
-          lineHeight: 1.6,
+          lineHeight: 1.65,
           maxHeight,
-          background: 'var(--ink-950)',
+          background: 'transparent',
           borderRadius: 0,
         }}
-        codeTagProps={{
-          style: { fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)' },
-        }}
+        codeTagProps={{ style: { fontFamily: 'var(--font-mono)' } }}
       >
         {code}
       </SyntaxHighlighter>
@@ -70,7 +128,7 @@ export function toPrismLang(lang: string): string {
     jsx: 'jsx',
     tsx: 'tsx',
     ts: 'typescript',
-    react: 'tsx',
+    react: 'jsx',
     python: 'python',
     php: 'php',
     html: 'markup',
