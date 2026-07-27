@@ -1,0 +1,15 @@
+[
+  {
+    "date": "2026-07-27",
+    "scope": "app",
+    "macrostructure": "Workbench (app) / Component Playground (docs) / Stat-Led (focused)",
+    "theme": "Cobalt",
+    "theme_axes": "cool-light + graphite-dark / grotesk-sans / electric-cobalt",
+    "genre": "modern-minimal",
+    "nav": "N3 side-rail + N13 inline ⌘K-pill",
+    "footer": "Ft2 inline single line (public surfaces only)",
+    "enrichment": "none (graphite code cards on docs only)",
+    "design_system": "design.md",
+    "brief": "Consi · USD/VES payment gateway — full-app redesign off the InVū/Aurora gradient system, plus dark mode"
+  }
+]

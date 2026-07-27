@@ -10,16 +10,33 @@ import type {
 
 const BASE = '/api/checkout';
 
+/** What a payer sees when the gateway is unreachable or answers with non-JSON. */
+const GENERIC_ERROR = 'No pudimos conectar con la pasarela. Intenta de nuevo en un momento.';
+
 /** Public checkout fetch — no auth header (the unguessable token is the credential). */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-    cache: 'no-store',
-  });
-  const body = (await res.json()) as ApiResponse<T>;
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+      cache: 'no-store',
+    });
+  } catch {
+    throw new Error(GENERIC_ERROR); // network down / DNS / CORS
+  }
+
+  // A 502 from the proxy returns an HTML error page, not JSON. Never let the
+  // resulting SyntaxError reach a payer — they can't act on "Unexpected token".
+  let body: ApiResponse<T>;
+  try {
+    body = (await res.json()) as ApiResponse<T>;
+  } catch {
+    throw new Error(GENERIC_ERROR);
+  }
+
   if (!res.ok || !body.success) {
-    throw new Error(body.error ?? `Request failed (${res.status})`);
+    throw new Error(body.error ?? GENERIC_ERROR);
   }
   return body.data as T;
 }

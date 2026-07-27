@@ -1,17 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Notice, PageHead } from '@/components/ui/page-head';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { AdminMerchantSummary } from '@/lib/types';
@@ -28,61 +24,68 @@ export default function AdminMerchantsPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-[var(--text-strong)]">Comercios</h1>
-        <Link
-          href="/admin/merchants/new"
-          className="rounded-[var(--radius-md)] px-4 py-2 text-sm font-bold text-white"
-          style={{ background: 'var(--gradient-brand)' }}
-        >
-          + Nuevo comercio
-        </Link>
-      </div>
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Comercios"
+        lede={`${merchants.length} ${merchants.length === 1 ? 'comercio registrado' : 'comercios registrados'}.`}
+        action={
+          <Link href="/admin/merchants/new" className={buttonVariants()}>
+            <Plus size={15} /> Nuevo comercio
+          </Link>
+        }
+      />
 
-      {error ? <p className="text-sm text-[var(--destructive)]">{error}</p> : null}
+      {error ? <Notice kind="err">{error}</Notice> : null}
 
-      <Card className="p-2">
+      <Card className="p-[var(--space-md)]">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Comercio</TableHead>
               <TableHead>Entorno</TableHead>
-              <TableHead>Saldos</TableHead>
-              <TableHead>Usuarios</TableHead>
-              <TableHead>Transacciones</TableHead>
-              <TableHead>Creado</TableHead>
+              <TableHead className="text-right">Saldos</TableHead>
+              <TableHead className="text-right">Usuarios</TableHead>
+              <TableHead className="text-right">Transacciones</TableHead>
+              <TableHead className="text-right">Creado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {merchants.map((m) => (
-              <TableRow key={m.id} className="cursor-pointer">
-                <TableCell>
-                  <Link href={`/admin/merchants/${m.id}`} className="block">
-                    <span className="font-semibold text-[var(--text-strong)]">
+              <TableRow key={m.id}>
+                <TableCell className="p-0">
+                  {/* The whole cell is the hit area — no cursor-pointer on a non-link row. */}
+                  <Link
+                    href={`/admin/merchants/${m.id}`}
+                    className="block px-3 py-2.5 transition-colors duration-[var(--dur-fast)] hover:text-[var(--color-accent)]"
+                  >
+                    <span className="block text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">
                       {m.businessName}
                     </span>
-                    <span className="block text-xs text-[var(--text-muted)]">{m.email}</span>
+                    <span className="block truncate text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                      {m.email}
+                    </span>
                   </Link>
                 </TableCell>
                 <TableCell>
                   <Badge>{m.environment === 'LIVE' ? 'Real' : 'Prueba'}</Badge>
                 </TableCell>
-                <TableCell className="text-sm">
+                <TableCell className="text-right">
                   {m.wallets.map((w) => (
-                    <div key={w.currency}>{formatMoney(w.balance, w.currency)}</div>
+                    <div key={w.currency} className="num text-[length:var(--text-sm)]">
+                      {formatMoney(w.balance, w.currency)}
+                    </div>
                   ))}
                 </TableCell>
-                <TableCell>{m._count.users}</TableCell>
-                <TableCell>{m._count.transactions}</TableCell>
-                <TableCell className="text-sm text-[var(--text-muted)]">
+                <TableCell className="num text-right">{m._count.users}</TableCell>
+                <TableCell className="num text-right">{m._count.transactions}</TableCell>
+                <TableCell className="whitespace-nowrap text-right text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
                   {formatDate(m.createdAt)}
                 </TableCell>
               </TableRow>
             ))}
             {merchants.length === 0 && !error ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-[var(--text-muted)]">
+                <TableCell colSpan={6} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
                   Sin comercios todavía.
                 </TableCell>
               </TableRow>

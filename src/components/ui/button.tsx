@@ -2,21 +2,33 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
-const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
+// Cobalt: 6px radii, never pills, never gradients. One solid accent button;
+// everything else is hairline-outlined or plain text.
+/** Exported so `<Link className={buttonVariants()}>` can share the voice
+ * without nesting an <a> inside a <button>. */
+export const buttonVariants = cva(
+  [
+    'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-sm)]',
+    'font-medium leading-none transition-[background-color,border-color,color] duration-[var(--dur-fast)]',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+    'active:translate-y-px disabled:pointer-events-none disabled:opacity-45',
+  ].join(' '),
   {
     variants: {
       variant: {
-        default: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90',
-        outline: 'border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)]',
-        ghost: 'hover:bg-[var(--muted)]',
-        destructive: 'bg-[var(--destructive)] text-white hover:opacity-90',
+        default:
+          'bg-[var(--color-accent)] text-[var(--color-accent-ink)] hover:bg-[var(--color-accent-hover)]',
+        outline:
+          'border border-[var(--color-rule)] bg-[var(--color-surface)] text-[var(--color-ink-2)] hover:border-[var(--color-rule-2)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-ink)]',
+        ghost: 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-ink)]',
+        destructive:
+          'border border-[var(--color-rule)] bg-[var(--color-surface)] text-[var(--color-bad)] hover:border-[var(--color-bad)] hover:bg-[var(--color-bad-soft)]',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3',
-        lg: 'h-11 px-6',
-        icon: 'h-10 w-10',
+        default: 'h-9 px-3.5 text-[length:var(--text-base)]',
+        sm: 'h-8 px-2.5 text-[length:var(--text-sm)]',
+        lg: 'h-10 px-5 text-[length:var(--text-md)]',
+        icon: 'size-9',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

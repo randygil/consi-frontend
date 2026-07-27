@@ -9,38 +9,45 @@ interface StepperProps {
   current: number;
 }
 
-/** Horizontal progress indicator for the onboarding wizard. */
+/** Horizontal progress indicator for the onboarding wizard. Square markers, mono numerals. */
 export function Stepper({ steps, current }: StepperProps) {
   return (
-    <ol className="flex items-center gap-2">
+    <ol className="flex items-center gap-2 overflow-x-auto">
       {steps.map((label, i) => {
         const done = i < current;
         const active = i === current;
         return (
-          <li key={label} className="flex flex-1 items-center gap-2">
+          <li key={label} className="flex shrink-0 items-center gap-2 last:flex-1">
             <span
+              aria-hidden
               className={cn(
-                'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors',
+                'flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-xs)]',
+                'font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium',
+                'transition-colors duration-[var(--dur-fast)]',
                 done
-                  ? 'bg-[var(--success-600)] text-white'
+                  ? 'bg-[var(--color-ok-soft)] text-[var(--color-ok)]'
                   : active
-                    ? 'text-white'
-                    : 'bg-[var(--ink-100)] text-[var(--text-muted)]',
+                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-ink)]'
+                    : 'border border-[var(--color-rule)] text-[var(--color-ink-4)]',
               )}
-              style={active ? { background: 'var(--gradient-brand)' } : undefined}
             >
-              {done ? <Check size={15} /> : i + 1}
+              {done ? <Check size={13} /> : i + 1}
             </span>
             <span
+              aria-current={active ? 'step' : undefined}
               className={cn(
-                'text-xs font-semibold',
-                active ? 'text-[var(--text-strong)]' : 'text-[var(--text-muted)]',
+                'whitespace-nowrap text-[length:var(--text-sm)]',
+                active
+                  ? 'font-medium text-[var(--color-ink)]'
+                  : done
+                    ? 'text-[var(--color-ink-3)]'
+                    : 'text-[var(--color-ink-4)]',
               )}
             >
               {label}
             </span>
             {i < steps.length - 1 ? (
-              <span className="h-px flex-1 bg-[var(--border)]" />
+              <span className="h-px w-6 shrink-0 bg-[var(--color-rule)] sm:w-10" aria-hidden />
             ) : null}
           </li>
         );

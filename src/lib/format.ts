@@ -33,6 +33,19 @@ export function formatMoney(amount: string | number, currency: Currency): string
   }).format(value);
 }
 
+/**
+ * BCV rate, always 2 decimals. Without maximumFractionDigits the es-VE locale
+ * renders 36.4215 as "36,422" — which reads as thirty-six thousand, not 36.42.
+ */
+export function formatRate(rate: string | number): string {
+  const value = typeof rate === 'string' ? Number(rate) : rate;
+  if (!Number.isFinite(value)) return '—';
+  return value.toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat('es-VE', {
     dateStyle: 'medium',

@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Label } from '@/components/ui/label';
+import { Notice, PageHead } from '@/components/ui/page-head';
 import { Select } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
-import type { Transaction, MerchantProfile } from '@/lib/types';
+import type { Transaction } from '@/lib/types';
 
 export default function SettlementsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
@@ -15,11 +17,12 @@ export default function SettlementsPage() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ released: number; evaluated: number } | null>(null);
 
-  // Settings state
   const [autoSettle, setAutoSettle] = useState(false);
   const [payoutMode, setPayoutMode] = useState<'INSTANT' | 'MANUAL'>('INSTANT');
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [settingsMessage, setSettingsMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [settingsMessage, setSettingsMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(
+    null,
+  );
 
   const load = useCallback(() => {
     api
@@ -63,129 +66,140 @@ export default function SettlementsPage() {
     setSettingsMessage(null);
     try {
       await api.updateSettings({ autoSettle, payoutMode });
-      setSettingsMessage({ kind: 'ok', text: 'Configuración guardada correctamente.' });
+      setSettingsMessage({ kind: 'ok', text: 'Configuración guardada.' });
       setTimeout(() => setSettingsMessage(null), 3000);
     } catch (err) {
-      setSettingsMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Error al guardar la configuración' });
+      setSettingsMessage({
+        kind: 'err',
+        text: err instanceof Error ? err.message : 'Error al guardar la configuración',
+      });
     } finally {
       setSettingsSaving(false);
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Liquidaciones y Dispersiones</h1>
-        <Button onClick={onRun} disabled={running}>
-          {running ? 'Procesando…' : 'Liberar fondos vencidos'}
-        </Button>
-      </div>
+  const heldTotal = rows.length;
 
-      {error ? <p className="text-sm text-[var(--destructive)]">{error}</p> : null}
+  return (
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Liquidaciones"
+        lede="Fondos retenidos por el período de retención y cómo se dispersan al liberarse."
+        action={
+          <Button onClick={onRun} disabled={running}>
+            {running ? 'Procesando…' : 'Liberar fondos vencidos'}
+          </Button>
+        }
+      />
+
+      {error ? <Notice kind="err">{error}</Notice> : null}
       {result ? (
-        <p className="text-sm text-green-600">
-          Liberados: {result.released} · Evaluados: {result.evaluated}
-        </p>
+        <Notice kind="ok">
+          Liberados {result.released} de {result.evaluated} evaluados.
+        </Notice>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main list of pending releases */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-[var(--foreground)]">
-                Fondos retenidos pendientes de liberación
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Referencia</TableHead>
-                    <TableHead>Moneda</TableHead>
-                    <TableHead>Neto</TableHead>
-                    <TableHead>Liberación tras</TableHead>
+      <div className="grid gap-[var(--space-md)] lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Card className="p-[var(--space-md)]">
+          <div className="mb-[var(--space-sm)] flex items-baseline justify-between gap-[var(--space-sm)]">
+            <h2 className="text-[length:var(--text-md)]">Pendientes de liberación</h2>
+            <span className="label">
+              {heldTotal} {heldTotal === 1 ? 'retención' : 'retenciones'}
+            </span>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Referencia</TableHead>
+                <TableHead>Moneda</TableHead>
+                <TableHead className="text-right">Neto</TableHead>
+                <TableHead className="text-right">Se libera</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
+                    No hay fondos retenidos.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="num text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+                      {t.reference.slice(0, 14)}
+                    </TableCell>
+                    <TableCell className="num text-[var(--color-ink-3)]">{t.currency}</TableCell>
+                    <TableCell className="num text-right text-[var(--color-ink)]">
+                      {t.netAmount
+                        ? formatMoney(t.netAmount, t.currency)
+                        : formatMoney(t.amount, t.currency)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                      {t.afterRetentionDate ? formatDate(t.afterRetentionDate) : '—'}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-6 text-[var(--muted-foreground)] font-medium">
-                        Sin fondos retenidos pendientes de liberación
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((t) => (
-                      <TableRow key={t.id}>
-                        <TableCell className="font-mono text-xs">{t.reference.slice(0, 14)}</TableCell>
-                        <TableCell>{t.currency}</TableCell>
-                        <TableCell>
-                          {t.netAmount ? formatMoney(t.netAmount, t.currency) : formatMoney(t.amount, t.currency)}
-                        </TableCell>
-                        <TableCell className="text-[var(--muted-foreground)]">
-                          {t.afterRetentionDate ? formatDate(t.afterRetentionDate) : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </Card>
 
-        {/* Settings panel */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-[var(--foreground)]">
-                Configuración de Liquidaciones
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={onSaveSettings} className="space-y-4">
-                <div className="flex items-start space-x-2.5 py-1">
-                  <input
-                    type="checkbox"
-                    id="autoSettle"
-                    checked={autoSettle}
-                    onChange={(e) => setAutoSettle(e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--ring)]"
-                  />
-                  <div className="space-y-1">
-                    <label htmlFor="autoSettle" className="text-sm font-semibold text-[var(--foreground)]">
-                      Dispersión automática (Sweep)
-                    </label>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Transfiere automáticamente el saldo disponible a tu cuenta bancaria principal cada vez que se liberen fondos.
-                    </p>
-                  </div>
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuración</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={onSaveSettings} className="flex flex-col gap-[var(--space-sm)]">
+              {/* Native checkbox, accent-tinted via accent-color — no re-drawn control. */}
+              <label
+                htmlFor="autoSettle"
+                className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-sm)] border border-[var(--color-rule)] p-2.5 transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-rule-2)]"
+              >
+                <input
+                  type="checkbox"
+                  id="autoSettle"
+                  checked={autoSettle}
+                  onChange={(e) => setAutoSettle(e.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--color-accent)]"
+                />
+                <span>
+                  <span className="block text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">
+                    Dispersión automática
+                  </span>
+                  <span className="mt-0.5 block text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+                    Transfiere el saldo disponible a tu cuenta principal cada vez que se liberen
+                    fondos.
+                  </span>
+                </span>
+              </label>
 
-                <div className="space-y-1.5 pt-2">
-                  <label className="text-sm font-medium text-[var(--foreground)]">Modo de retiro por defecto</label>
-                  <Select value={payoutMode} onChange={(e) => setPayoutMode(e.target.value as 'INSTANT' | 'MANUAL')}>
-                    <option value="INSTANT">Instantáneo (Inmediato)</option>
-                    <option value="MANUAL">Manual (Requiere aprobación del administrador)</option>
-                  </Select>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    Establece si las dispersiones y retiros solicitados se envían inmediatamente al banco o quedan retenidos para aprobación.
-                  </p>
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="payoutMode">Modo de retiro por defecto</Label>
+                <Select
+                  id="payoutMode"
+                  value={payoutMode}
+                  onChange={(e) => setPayoutMode(e.target.value as 'INSTANT' | 'MANUAL')}
+                >
+                  <option value="INSTANT">Instantáneo</option>
+                  <option value="MANUAL">Manual — requiere aprobación</option>
+                </Select>
+                <p className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+                  Define si los retiros se envían al banco de inmediato o quedan en cola de
+                  aprobación.
+                </p>
+              </div>
 
-                {settingsMessage ? (
-                  <p className={settingsMessage.kind === 'ok' ? 'text-sm text-green-600' : 'text-sm text-[var(--destructive)]'}>
-                    {settingsMessage.text}
-                  </p>
-                ) : null}
+              {settingsMessage ? (
+                <Notice kind={settingsMessage.kind}>{settingsMessage.text}</Notice>
+              ) : null}
 
-                <Button type="submit" disabled={settingsSaving} className="w-full justify-center">
-                  {settingsSaving ? 'Guardando…' : 'Guardar configuración'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+              <Button type="submit" disabled={settingsSaving} className="w-full">
+                {settingsSaving ? 'Guardando…' : 'Guardar configuración'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

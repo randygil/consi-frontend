@@ -3,15 +3,26 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/components/auth-provider';
-import { AdminSidebar } from '@/components/admin/sidebar';
+import { AdminMobileNav, ADMIN_NAV, AdminSidebar } from '@/components/admin/sidebar';
+import { CommandPalette, type Command } from '@/components/command-palette';
+import { ThemeToggle } from '@/components/theme-toggle';
+
+const COMMANDS: Command[] = ADMIN_NAV.map((n) => ({
+  group: 'Ir a',
+  label: n.label,
+  keywords: n.keywords,
+  href: n.href,
+}));
 
 function AdminHeader() {
   const { user, logout } = useAuth();
   return (
-    <header className="flex h-[68px] items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-7">
-      <div>
-        <p className="text-[15px] font-bold text-[var(--text-strong)]">Panel de administración</p>
-        <p className="text-[12.5px] text-[var(--text-subtle)]">
+    <header className="flex h-[var(--header-h)] shrink-0 items-center justify-between gap-[var(--space-sm)] border-b border-[var(--color-rule)] bg-[var(--color-surface)] px-[var(--space-sm)]">
+      <div className="min-w-0">
+        <p className="truncate font-[family-name:var(--font-display)] text-[length:var(--text-base)] font-semibold tracking-[var(--tracking-display)] text-[var(--color-ink)]">
+          Administración
+        </p>
+        <p className="truncate font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] text-[var(--color-ink-4)]">
           {user?.email ? (
             <>
               {user.email.split('@')[0]}
@@ -23,16 +34,20 @@ function AdminHeader() {
           )}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={logout}
-        title="Cerrar sesión"
-        aria-label="Cerrar sesión"
-        className="flex size-[38px] items-center justify-center rounded-full text-[13px] font-bold text-white"
-        style={{ background: 'var(--gradient-warm)' }}
-      >
-        A
-      </button>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <CommandPalette commands={COMMANDS} />
+        <ThemeToggle />
+        <button
+          type="button"
+          onClick={logout}
+          title="Cerrar sesión"
+          aria-label="Cerrar sesión"
+          className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-graphite)] font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium text-[var(--color-on-graphite)] transition-opacity duration-[var(--dur-fast)] hover:opacity-85"
+        >
+          A
+        </button>
+      </div>
     </header>
   );
 }
@@ -50,8 +65,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-[var(--muted-foreground)]">
-        Cargando…
+      <div className="flex min-h-screen items-center justify-center">
+        <span className="label">Cargando</span>
       </div>
     );
   }
@@ -60,9 +75,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <AdminSidebar />
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <AdminHeader />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <AdminMobileNav />
+        <main className="flex-1 overflow-x-clip p-[var(--space-sm)] lg:p-[var(--space-md)]">
+          {children}
+        </main>
       </div>
     </div>
   );

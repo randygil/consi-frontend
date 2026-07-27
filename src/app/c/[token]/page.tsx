@@ -14,20 +14,19 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { checkoutApi } from '@/lib/checkout-client';
 import { formatMoney } from '@/lib/format';
-import type {
-  CheckoutData,
-  PaymentInstructions,
-  PaymentMethod,
-} from '@/lib/types';
+import type { CheckoutData, PaymentInstructions, PaymentMethod } from '@/lib/types';
 
 const METHOD_ICON: Record<PaymentMethod, React.ReactNode> = {
-  PAGO_MOVIL: <Smartphone size={20} />,
-  TRANSFER: <Building2 size={20} />,
-  USDT: <Coins size={20} />,
-  CARD: <CreditCard size={20} />,
+  PAGO_MOVIL: <Smartphone size={17} />,
+  TRANSFER: <Building2 size={17} />,
+  USDT: <Coins size={17} />,
+  CARD: <CreditCard size={17} />,
 };
 
 type Step = 'method' | 'instructions' | 'done';
+
+const inputCls =
+  'w-full rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-surface)] px-2.5 py-2 font-[family-name:var(--font-mono)] text-[length:var(--text-base)] text-[var(--color-ink)] outline-none transition-colors duration-[var(--dur-fast)] placeholder:text-[var(--color-ink-4)] focus-visible:border-[var(--color-accent)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-focus)]';
 
 export default function CheckoutPage() {
   const token = String(useParams().token);
@@ -51,12 +50,16 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (step !== 'instructions') return;
     const id = setInterval(() => {
-      checkoutApi.status(token).then((s) => {
-        if (s.status === 'PAID') {
-          setStep('done');
-          clearInterval(id);
-        }
-      });
+      checkoutApi
+        .status(token)
+        .then((s) => {
+          if (s.status === 'PAID') {
+            setStep('done');
+            clearInterval(id);
+          }
+        })
+        // A blip mid-poll is not worth alarming the payer — the next tick retries.
+        .catch(() => {});
     }, 3000);
     return () => clearInterval(id);
   }, [step, token]);
@@ -98,15 +101,17 @@ export default function CheckoutPage() {
   if (error && !data) {
     return (
       <Shell>
-        <p className="text-center text-sm text-[var(--danger-600)]">{error}</p>
+        <p role="alert" className="py-[var(--space-lg)] text-center text-[length:var(--text-sm)] text-[var(--color-bad)]">
+          {error}
+        </p>
       </Shell>
     );
   }
   if (!data) {
     return (
       <Shell>
-        <div className="flex justify-center py-10">
-          <Loader2 className="animate-spin text-[var(--text-subtle)]" />
+        <div className="flex justify-center py-[var(--space-xl)]">
+          <Loader2 className="animate-spin text-[var(--color-ink-4)]" size={20} />
         </div>
       </Shell>
     );
@@ -117,23 +122,23 @@ export default function CheckoutPage() {
       <AmountBlock data={data} />
 
       {step === 'method' && (
-        <div className="space-y-2.5">
-          <p className="text-[13px] font-semibold text-[var(--text-muted)]">
-            Elige cómo pagar
-          </p>
+        <div className="flex flex-col gap-2">
+          <p className="label">Elige cómo pagar</p>
           {data.methods.map((m) => (
             <button
               key={m.method}
               type="button"
               disabled={busy}
               onClick={() => choose(m.method)}
-              className="flex w-full items-center gap-3 rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-4 py-3.5 text-left transition-all hover:border-[var(--blue-400)] hover:shadow-[var(--shadow-sm)] disabled:opacity-50"
+              className="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-surface)] px-3 py-3 text-left transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-accent)] disabled:opacity-50"
             >
-              <span className="flex size-9 items-center justify-center rounded-[10px] bg-[var(--blue-100)] text-[var(--blue-700)]">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--color-rule)] text-[var(--color-ink-3)]">
                 {METHOD_ICON[m.method]}
               </span>
-              <span className="flex-1 font-semibold text-[var(--text-strong)]">{m.label}</span>
-              {busy ? <Loader2 size={16} className="animate-spin text-[var(--text-subtle)]" /> : null}
+              <span className="flex-1 text-[length:var(--text-base)] font-medium text-[var(--color-ink)]">
+                {m.label}
+              </span>
+              {busy ? <Loader2 size={15} className="animate-spin text-[var(--color-ink-4)]" /> : null}
             </button>
           ))}
         </div>
@@ -157,7 +162,9 @@ export default function CheckoutPage() {
       {step === 'done' && <DoneView successUrl={data.successUrl} />}
 
       {error && data ? (
-        <p className="text-center text-xs text-[var(--danger-600)]">{error}</p>
+        <p role="alert" className="text-center text-[length:var(--text-xs)] text-[var(--color-bad)]">
+          {error}
+        </p>
       ) : null}
     </Shell>
   );
@@ -165,41 +172,46 @@ export default function CheckoutPage() {
 
 function Shell({ children, businessName }: { children: React.ReactNode; businessName?: string }) {
   return (
-    <main
-      className="flex min-h-screen items-center justify-center p-4"
-      style={{ background: 'var(--gradient-mesh)' }}
-    >
-      <div className="w-full max-w-[420px] rounded-[var(--radius-xl)] bg-white p-7 shadow-[var(--shadow-lg)]">
-        <div className="mb-5 flex items-center justify-between">
-          <span className="text-[15px] font-extrabold tracking-tight text-[var(--text-strong)]">
-            {businessName ?? 'Consi'}
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--ink-50)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--text-muted)]">
-            <Lock size={11} /> Pago seguro
-          </span>
+    <main className="flex min-h-screen items-center justify-center p-[var(--space-sm)]">
+      <div className="w-full max-w-[400px]">
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-rule)] bg-[var(--color-surface)] p-[var(--space-md)]">
+          <div className="mb-[var(--space-md)] flex items-center justify-between gap-2 border-b border-[var(--color-rule)] pb-[var(--space-xs)]">
+            <span className="min-w-0 truncate font-[family-name:var(--font-display)] text-[length:var(--text-base)] font-semibold tracking-[var(--tracking-display)] text-[var(--color-ink)]">
+              {businessName ?? 'Consi'}
+            </span>
+            <span className="label flex shrink-0 items-center gap-1">
+              <Lock size={10} /> Pago seguro
+            </span>
+          </div>
+          <div className="flex flex-col gap-[var(--space-md)]">{children}</div>
         </div>
-        <div className="space-y-5">{children}</div>
-        <p className="mt-6 text-center text-[11px] text-[var(--text-subtle)]">
-          Procesado por <span className="font-bold">Consi</span> · Pasarela de pagos
+
+        {/* Ft2 — inline single line */}
+        <p className="mt-[var(--space-sm)] text-center text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+          Procesado por <span className="text-[var(--color-ink-3)]">Consi</span> · Pasarela de pagos
         </p>
       </div>
     </main>
   );
 }
 
+/** Stat-Led: the amount is the hero. Everything below qualifies it. */
 function AmountBlock({ data }: { data: CheckoutData }) {
   return (
-    <div className="rounded-[var(--radius-lg)] bg-[var(--ink-50)] p-5 text-center">
-      <div className="font-mono text-[34px] font-bold leading-none text-[var(--text-strong)]">
+    <div className="min-w-0 text-center">
+      <p className="label">Total a pagar</p>
+      <p className="num mt-2 break-words text-[length:clamp(1.75rem,9vw,2.375rem)] font-medium leading-none text-[var(--color-ink)]">
         {formatMoney(data.amount, data.currency)}
-      </div>
+      </p>
       {data.currency !== 'USD' ? (
-        <div className="mt-1.5 text-[13px] text-[var(--text-muted)]">
+        <p className="num mt-2 text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
           ≈ {formatMoney(data.usdEquivalent, 'USD')}
-        </div>
+        </p>
       ) : null}
       {data.description ? (
-        <div className="mt-2 text-[13px] font-medium text-[var(--text-body)]">{data.description}</div>
+        <p className="mt-2 text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
+          {data.description}
+        </p>
       ) : null}
     </div>
   );
@@ -221,40 +233,45 @@ function InstructionsView({
   onBack: () => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-[var(--space-sm)]">
       <div className="flex items-center gap-2">
-        <span className="flex size-8 items-center justify-center rounded-[9px] bg-[var(--blue-100)] text-[var(--blue-700)]">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--color-rule)] text-[var(--color-ink-3)]">
           {METHOD_ICON[instructions.method]}
         </span>
-        <span className="font-bold text-[var(--text-strong)]">{instructions.label}</span>
+        <span className="text-[length:var(--text-base)] font-medium text-[var(--color-ink)]">
+          {instructions.label}
+        </span>
       </div>
-      <p className="text-[13px] leading-relaxed text-[var(--text-body)]">{instructions.note}</p>
+      <p className="text-[length:var(--text-sm)] leading-relaxed text-[var(--color-ink-2)]">
+        {instructions.note}
+      </p>
 
       {instructions.interactive ? (
         <CardForm />
       ) : (
         <>
           {instructions.qr ? <QrBox value={instructions.qr} /> : null}
-          <div className="divide-y divide-[var(--ink-100)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--ink-150)]">
+          <div className="divide-y divide-[var(--color-rule)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-rule)]">
             {instructions.fields.map((f) => (
               <Field key={f.label} label={f.label} value={f.value} copyable={f.copyable !== false} />
             ))}
           </div>
-          <label className="block space-y-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-              Número de referencia del pago
-            </span>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="ref" className="label">
+              Número de referencia
+            </label>
             <input
+              id="ref"
               value={reference}
               onChange={(e) => onReferenceChange(e.target.value)}
-              placeholder="Ej. 0123456789"
+              placeholder="0123456789"
               inputMode="numeric"
-              className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
+              className={inputCls}
             />
-            <span className="text-[11px] text-[var(--text-subtle)]">
-              Ingresa la referencia que te dio tu banco para confirmar el pago.
+            <span className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+              La referencia que te dio tu banco al hacer el pago.
             </span>
-          </label>
+          </div>
         </>
       )}
 
@@ -262,18 +279,17 @@ function InstructionsView({
         type="button"
         disabled={busy}
         onClick={onConfirm}
-        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
-        style={{ background: 'var(--gradient-brand)' }}
+        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-4 py-3 text-[length:var(--text-base)] font-medium text-[var(--color-accent-ink)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--color-accent-hover)] active:translate-y-px disabled:opacity-50"
       >
-        {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+        {busy ? <Loader2 size={15} className="animate-spin" /> : null}
         {instructions.interactive ? 'Pagar ahora' : 'Ya realicé el pago'}
       </button>
       <button
         type="button"
         onClick={onBack}
-        className="w-full text-center text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+        className="w-full text-center text-[length:var(--text-sm)] text-[var(--color-ink-3)] underline-offset-4 transition-colors duration-[var(--dur-fast)] hover:text-[var(--color-ink)] hover:underline"
       >
-        ← Cambiar método de pago
+        Cambiar método de pago
       </button>
     </div>
   );
@@ -282,12 +298,10 @@ function InstructionsView({
 function Field({ label, value, copyable }: { label: string; value: string; copyable: boolean }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex items-center justify-between gap-3 bg-white px-3.5 py-2.5">
+    <div className="flex items-center justify-between gap-2 bg-[var(--color-surface)] px-3 py-2">
       <div className="min-w-0">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-          {label}
-        </div>
-        <div className="truncate font-mono text-[13px] font-semibold text-[var(--text-strong)]">
+        <div className="label">{label}</div>
+        <div className="num mt-0.5 truncate text-[length:var(--text-sm)] text-[var(--color-ink)]">
           {value}
         </div>
       </div>
@@ -300,9 +314,13 @@ function Field({ label, value, copyable }: { label: string; value: string; copya
             setCopied(true);
             setTimeout(() => setCopied(false), 1200);
           }}
-          className="flex size-8 flex-none items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--blue-700)]"
+          className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] text-[var(--color-ink-4)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-accent)]"
         >
-          {copied ? <CheckCircle2 size={15} className="text-[var(--success-600)]" /> : <Copy size={15} />}
+          {copied ? (
+            <CheckCircle2 size={14} className="text-[var(--color-ok)]" />
+          ) : (
+            <Copy size={14} />
+          )}
         </button>
       ) : null}
     </div>
@@ -311,40 +329,32 @@ function Field({ label, value, copyable }: { label: string; value: string; copya
 
 function QrBox({ value }: { value: string }) {
   // Rendered via a public QR image service for the MVP; swap for a bundled encoder
-  // in production. The raw value below is always available as a fallback to copy.
+  // in production. The raw value is always available to copy in the fields below.
   const src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=${encodeURIComponent(value)}`;
   return (
-    <div className="flex flex-col items-center gap-2 rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white p-4">
+    <figure className="flex flex-col items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-surface)] p-[var(--space-sm)]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="Código QR de pago" width={150} height={150} className="rounded-[8px]" />
-      <span className="text-[11px] text-[var(--text-subtle)]">Escanea para pagar</span>
-    </div>
+      <img
+        src={src}
+        alt="Código QR de pago"
+        width={150}
+        height={150}
+        className="rounded-[var(--radius-xs)] bg-white"
+      />
+      <figcaption className="label">Escanea para pagar</figcaption>
+    </figure>
   );
 }
 
 function CardForm() {
   return (
-    <div className="space-y-2.5">
-      <input
-        placeholder="Número de tarjeta"
-        inputMode="numeric"
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-      />
-      <div className="flex gap-2.5">
-        <input
-          placeholder="MM/AA"
-          className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-        />
-        <input
-          placeholder="CVC"
-          inputMode="numeric"
-          className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-        />
+    <div className="flex flex-col gap-2">
+      <input placeholder="Número de tarjeta" inputMode="numeric" className={inputCls} autoComplete="cc-number" />
+      <div className="flex gap-2">
+        <input placeholder="MM/AA" className={inputCls} autoComplete="cc-exp" />
+        <input placeholder="CVC" inputMode="numeric" className={inputCls} autoComplete="cc-csc" />
       </div>
-      <input
-        placeholder="Nombre en la tarjeta"
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 text-sm outline-none focus:border-[var(--blue-400)]"
-      />
+      <input placeholder="Nombre en la tarjeta" className={inputCls} autoComplete="cc-name" />
     </div>
   );
 }
@@ -367,14 +377,19 @@ function DoneView({ successUrl }: { successUrl: string | null }) {
   }, [successUrl]);
 
   return (
-    <div className="flex flex-col items-center gap-3 py-6 text-center">
-      <span className="flex size-16 items-center justify-center rounded-full bg-[var(--success-100)]">
-        <CheckCircle2 size={36} className="text-[var(--success-600)]" />
+    <div
+      role="status"
+      className="flex flex-col items-center gap-3 py-[var(--space-lg)] text-center"
+    >
+      <span className="flex size-11 items-center justify-center rounded-full bg-[var(--color-ok-soft)]">
+        <CheckCircle2 size={24} className="text-[var(--color-ok)]" />
       </span>
-      <div className="text-lg font-extrabold text-[var(--text-strong)]">¡Pago confirmado!</div>
-      <p className="text-[13px] text-[var(--text-muted)]">
-        Tu pago fue recibido correctamente.
-        {successUrl ? ' Redirigiendo…' : ''}
+      <p className="text-[length:var(--text-lg)] font-semibold text-[var(--color-ink)]">
+        Pago confirmado
+      </p>
+      <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+        Recibimos tu pago correctamente.
+        {successUrl ? ' Te estamos redirigiendo…' : ''}
       </p>
     </div>
   );

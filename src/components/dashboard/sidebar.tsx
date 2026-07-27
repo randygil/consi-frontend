@@ -2,26 +2,40 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  ArrowLeftRight,
-  Banknote,
-  Code2,
-  LayoutDashboard,
-  Link2,
-  Wallet,
-} from 'lucide-react';
+import { ArrowLeftRight, Banknote, Code2, LayoutDashboard, Link2, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
+import { formatRate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-const NAV = [
-  { href: '/', label: 'Panel', icon: LayoutDashboard },
-  { href: '/links', label: 'Links de pago', icon: Link2 },
-  { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight },
-  { href: '/payouts', label: 'Retiros', icon: Banknote },
-  { href: '/settlements', label: 'Liquidaciones', icon: Wallet },
-  { href: '/developers', label: 'Desarrolladores', icon: Code2 },
+export const MERCHANT_NAV = [
+  { href: '/', label: 'Panel', icon: LayoutDashboard, keywords: 'resumen dashboard inicio' },
+  { href: '/links', label: 'Links de pago', icon: Link2, keywords: 'cobrar checkout payment links' },
+  { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight, keywords: 'pagos movimientos' },
+  { href: '/payouts', label: 'Retiros', icon: Banknote, keywords: 'payout banco cuenta' },
+  { href: '/settlements', label: 'Liquidaciones', icon: Wallet, keywords: 'settlement dispersion' },
+  { href: '/developers', label: 'Desarrolladores', icon: Code2, keywords: 'api keys webhooks docs' },
 ];
+
+/** Wordmark: a filled accent square, not a gradient dot. One mark, one colour. */
+export function Wordmark({ suffix }: { suffix: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="size-3 rounded-[2px] bg-[var(--color-accent)]" aria-hidden />
+      <span className="font-[family-name:var(--font-display)] text-[length:var(--text-md)] font-semibold tracking-[var(--tracking-display)] text-[var(--color-ink)]">
+        Consi
+      </span>
+      <span className="label pt-px">{suffix}</span>
+    </div>
+  );
+}
+
+function isActive(pathname: string, href: string): boolean {
+  return href === '/' ? pathname === '/' : pathname.startsWith(href);
+}
+
+const itemBase =
+  'relative flex items-center gap-2.5 rounded-[var(--radius-sm)] text-[length:var(--text-base)] transition-colors duration-[var(--dur-fast)]';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -30,60 +44,87 @@ export function Sidebar() {
   useEffect(() => {
     api
       .getLatestRate()
-      .then((r) => setRate(Number(r.rate).toLocaleString('es-VE', { minimumFractionDigits: 2 })))
+      .then((r) => setRate(formatRate(r.rate)))
       .catch(() => setRate(null));
   }, []);
 
   return (
-    <aside className="flex w-[236px] shrink-0 flex-col gap-6 border-r border-[var(--border)] bg-[var(--sidebar)] p-4">
-      {/* Brand */}
-      <div className="flex items-center gap-2.5 px-2 pt-2">
-        <span
-          className="size-2.5 rounded-full"
-          style={{ background: 'var(--gradient-brand)', boxShadow: 'var(--glow-brand)' }}
-        />
-        <span className="text-lg font-extrabold tracking-tight text-[var(--text-strong)]">Consi</span>
-        <span className="text-xs font-semibold text-[var(--text-subtle)]">Pagos</span>
+    <aside className="hidden w-[var(--rail-w)] shrink-0 flex-col border-r border-[var(--color-rule)] bg-[var(--color-surface)] lg:flex">
+      <div className="flex h-[var(--header-h)] items-center border-b border-[var(--color-rule)] px-[var(--space-sm)]">
+        <Wordmark suffix="Pagos" />
       </div>
 
-      {/* Nav */}
-      <nav className="flex flex-col gap-1">
-        {NAV.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+      <nav className="flex flex-col gap-0.5 p-[var(--space-2xs)]">
+        <div className="label px-2 pb-1.5 pt-2">Comercio</div>
+        {MERCHANT_NAV.map(({ href, label, icon: Icon }) => {
+          const active = isActive(pathname, href);
           return (
             <Link
               key={href}
               href={href}
+              aria-current={active ? 'page' : undefined}
               className={cn(
-                'relative flex items-center gap-3 rounded-[var(--radius-md)] px-3.5 py-2.5 text-sm transition-all duration-200',
+                itemBase,
+                'px-2.5 py-2',
                 active
-                  ? 'bg-[var(--blue-50)] font-bold text-[var(--blue-700)]'
-                  : 'font-semibold text-[var(--text-muted)] hover:bg-[var(--ink-100)] hover:text-[var(--text-strong)]',
+                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                  : 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-ink)]',
               )}
             >
               {active ? (
                 <span
-                  className="absolute inset-y-2 left-0 w-[3px] rounded-full"
-                  style={{ background: 'var(--gradient-brand)' }}
+                  className="absolute inset-y-1.5 -left-[var(--space-2xs)] w-0.5 rounded-r-full bg-[var(--color-accent)]"
+                  aria-hidden
                 />
               ) : null}
-              <Icon size={19} />
+              <Icon size={16} strokeWidth={active ? 2.25 : 1.75} />
               {label}
             </Link>
           );
         })}
       </nav>
 
-      {/* BCV rate card */}
-      <div
-        className="mt-auto rounded-[var(--radius-md)] border border-[var(--blue-100)] p-3.5"
-        style={{ background: 'var(--gradient-brand-soft)' }}
-      >
-        <div className="mb-0.5 text-xs font-bold text-[var(--blue-700)]">Tasa BCV</div>
-        <div className="font-mono text-[15px] font-semibold text-[var(--text-strong)]">
-          {rate ?? '—'} <span className="text-[11px] text-[var(--text-muted)]">VES/USD</span>
+      {/* Live BCV rate — a readout, not a promo card. */}
+      <div className="mt-auto border-t border-[var(--color-rule)] p-[var(--space-sm)]">
+        <div className="label pb-1">Tasa BCV</div>
+        <div className="num text-[length:var(--text-md)] font-medium text-[var(--color-ink)]">
+          {rate ?? '—'}
         </div>
+        <div className="label pt-0.5 normal-case tracking-normal">VES por USD</div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Below lg the rail is replaced by a scrollable strip rather than a drawer —
+ * no overlay, no focus trap, no state, and it never forces the body to scroll
+ * sideways at 320px.
+ */
+export function MobileNav({ items }: { items: typeof MERCHANT_NAV }) {
+  const pathname = usePathname();
+  return (
+    <nav className="flex gap-1 overflow-x-auto border-b border-[var(--color-rule)] bg-[var(--color-surface)] px-[var(--space-xs)] py-1.5 lg:hidden">
+      {items.map(({ href, label, icon: Icon }) => {
+        const active = isActive(pathname, href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              itemBase,
+              'shrink-0 whitespace-nowrap px-2.5 py-1.5',
+              active
+                ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                : 'text-[var(--color-ink-3)]',
+            )}
+          >
+            <Icon size={15} strokeWidth={active ? 2.25 : 1.75} />
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

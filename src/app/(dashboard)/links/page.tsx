@@ -3,12 +3,14 @@
 import { Check, Copy, ExternalLink, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Notice, PageHead } from '@/components/ui/page-head';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatMoney } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { Currency, PaymentLinkSummary, PaymentMethod } from '@/lib/types';
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
@@ -25,6 +27,17 @@ const LINK_STATUS_LABEL: Record<string, string> = {
   EXPIRED: 'Expirado',
   CANCELLED: 'Cancelado',
 };
+
+/** Shared voice for the selectable chips: hairline off, accent-tinted on. */
+const chip = (on: boolean) =>
+  cn(
+    'inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 py-1.5 text-[length:var(--text-sm)]',
+    'transition-colors duration-[var(--dur-fast)]',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+    on
+      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+      : 'border-[var(--color-rule)] text-[var(--color-ink-3)] hover:border-[var(--color-rule-2)] hover:text-[var(--color-ink)]',
+  );
 
 export default function LinksPage() {
   const [links, setLinks] = useState<PaymentLinkSummary[]>([]);
@@ -68,144 +81,131 @@ export default function LinksPage() {
   }
 
   return (
-    <div className="flex flex-col gap-[18px]">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-[var(--text-strong)]">
-            Links de pago
-          </h1>
-          <p className="mt-0.5 text-[13px] text-[var(--text-subtle)]">
-            Crea un link y compártelo, o incrústalo en tu web. Tus clientes pagan sin salir.
-          </p>
-        </div>
-        <Button onClick={() => setCreating((v) => !v)}>
-          <Plus size={16} /> Crear link
-        </Button>
-      </div>
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Links de pago"
+        lede="Crea un link y compártelo, o incrústalo en tu web. Tus clientes pagan sin salir."
+        action={
+          <Button onClick={() => setCreating((v) => !v)}>
+            <Plus size={15} /> Crear link
+          </Button>
+        }
+      />
 
       {creating && (
-        <Card className="p-[22px]">
-          <CardContent className="p-0">
-            <form onSubmit={create} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="amount">Monto</Label>
-                  <Input
-                    id="amount"
-                    required
-                    inputMode="decimal"
-                    placeholder="25.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Moneda</Label>
-                  <div className="flex gap-2">
-                    {CURRENCIES.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setCurrency(c)}
-                        className={
-                          currency === c
-                            ? 'flex-1 rounded-[var(--radius-sm)] border border-[var(--blue-400)] bg-[var(--blue-50)] py-2.5 text-sm font-bold text-[var(--blue-700)]'
-                            : 'flex-1 rounded-[var(--radius-sm)] border border-[var(--ink-150)] py-2.5 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--blue-300)]'
-                        }
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="description">Descripción (opcional)</Label>
+        <Card className="p-[var(--space-md)]">
+          <form onSubmit={create} className="flex flex-col gap-[var(--space-sm)]">
+            <div className="grid gap-[var(--space-sm)] sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="amount">Monto</Label>
                 <Input
-                  id="description"
-                  placeholder="Suscripción mensual — Plan Pro"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  id="amount"
+                  required
+                  inputMode="decimal"
+                  placeholder="25.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="num"
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <Label>Métodos de pago</Label>
-                <div className="flex flex-wrap gap-2">
-                  {METHODS.map((m) => {
-                    const on = methods.includes(m.value);
-                    return (
-                      <button
-                        key={m.value}
-                        type="button"
-                        onClick={() => toggleMethod(m.value)}
-                        className={
-                          on
-                            ? 'inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--blue-400)] bg-[var(--blue-50)] px-3.5 py-1.5 text-[13px] font-bold text-[var(--blue-700)]'
-                            : 'inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--ink-150)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--text-muted)] hover:border-[var(--blue-300)]'
-                        }
-                      >
-                        {on ? <Check size={13} /> : null}
-                        {m.label}
-                      </button>
-                    );
-                  })}
+              <div className="flex flex-col gap-1.5">
+                <Label>Moneda</Label>
+                <div className="flex gap-2">
+                  {CURRENCIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-pressed={currency === c}
+                      onClick={() => setCurrency(c)}
+                      className={cn(chip(currency === c), 'num flex-1 justify-center')}
+                    >
+                      {c}
+                    </button>
+                  ))}
                 </div>
               </div>
+            </div>
 
-              {error ? <p className="text-sm text-[var(--danger-600)]">{error}</p> : null}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="description">Descripción (opcional)</Label>
+              <Input
+                id="description"
+                placeholder="Suscripción mensual — Plan Pro"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" disabled={busy || methods.length === 0}>
-                  {busy ? 'Creando…' : 'Crear link'}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setCreating(false)}>
-                  Cancelar
-                </Button>
+            <div className="flex flex-col gap-1.5">
+              <Label>Métodos de pago</Label>
+              <div className="flex flex-wrap gap-2">
+                {METHODS.map((m) => {
+                  const on = methods.includes(m.value);
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleMethod(m.value)}
+                      className={chip(on)}
+                    >
+                      {on ? <Check size={13} /> : null}
+                      {m.label}
+                    </button>
+                  );
+                })}
               </div>
-            </form>
-          </CardContent>
+            </div>
+
+            {error ? <Notice kind="err">{error}</Notice> : null}
+
+            <div className="flex gap-2 pt-1">
+              <Button type="submit" disabled={busy || methods.length === 0}>
+                {busy ? 'Creando…' : 'Crear link'}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setCreating(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
         </Card>
       )}
 
-      <Card className="p-[22px]">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
+      <Card className="p-[var(--space-md)]">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Descripción</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Link</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {links.length === 0 ? (
               <TableRow>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Monto</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Link</TableHead>
+                <TableCell colSpan={4} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
+                  Aún no has creado links de pago.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {links.length === 0 ? (
-                <TableRow>
-                  <TableCell className="text-[var(--text-muted)]">
-                    Aún no has creado links de pago.
+            ) : (
+              links.map((l) => (
+                <TableRow key={l.token}>
+                  <TableCell className="text-[var(--color-ink)]">{l.description ?? '—'}</TableCell>
+                  <TableCell className="num text-right text-[var(--color-ink)]">
+                    {formatMoney(l.amount, l.currency)}
+                  </TableCell>
+                  <TableCell>
+                    <LinkStatusBadge status={l.status} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <LinkActions url={l.url} />
                   </TableCell>
                 </TableRow>
-              ) : (
-                links.map((l) => (
-                  <TableRow key={l.token}>
-                    <TableCell className="font-semibold text-[var(--text-strong)]">
-                      {l.description ?? '—'}
-                    </TableCell>
-                    <TableCell className="font-mono">{formatMoney(l.amount, l.currency)}</TableCell>
-                    <TableCell>
-                      <LinkStatusBadge status={l.status} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <LinkActions url={l.url} />
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </Card>
     </div>
   );
@@ -214,14 +214,15 @@ export default function LinksPage() {
 function LinkStatusBadge({ status }: { status: string }) {
   const tone =
     status === 'PAID'
-      ? 'bg-[var(--success-100)] text-[var(--success-600)]'
+      ? 'bg-[var(--color-ok-soft)] text-[var(--color-ok)]'
       : status === 'ACTIVE'
-        ? 'bg-[var(--blue-100)] text-[var(--blue-700)]'
-        : 'bg-[var(--ink-100)] text-[var(--text-muted)]';
+        ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+        : 'bg-[var(--color-paper-3)] text-[var(--color-ink-3)]';
   return (
     <span
-      className={`inline-flex items-center rounded-[var(--radius-pill)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] ${tone}`}
+      className={`inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] ${tone}`}
     >
+      <span className="size-1.5 rounded-full bg-current" aria-hidden />
       {LINK_STATUS_LABEL[status] ?? status}
     </span>
   );
@@ -231,12 +232,12 @@ function LinkActions({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   const fullUrl = typeof window !== 'undefined' ? `${window.location.origin}${url}` : url;
   const iconBtn =
-    'flex size-9 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--ink-150)] text-[var(--text-muted)] transition-colors hover:border-[var(--blue-300)] hover:text-[var(--blue-700)]';
+    'flex size-8 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-rule)] text-[var(--color-ink-3)] transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]';
   return (
     <div className="flex justify-end gap-1.5">
       <button
         type="button"
-        aria-label="Copiar URL"
+        aria-label="Copiar URL del link"
         className={iconBtn}
         onClick={() => {
           navigator.clipboard.writeText(fullUrl);
@@ -244,10 +245,10 @@ function LinkActions({ url }: { url: string }) {
           setTimeout(() => setCopied(false), 1200);
         }}
       >
-        {copied ? <Check size={15} className="text-[var(--success-600)]" /> : <Copy size={15} />}
+        {copied ? <Check size={14} className="text-[var(--color-ok)]" /> : <Copy size={14} />}
       </button>
       <a href={url} target="_blank" rel="noreferrer" aria-label="Abrir checkout" className={iconBtn}>
-        <ExternalLink size={15} />
+        <ExternalLink size={14} />
       </a>
     </div>
   );

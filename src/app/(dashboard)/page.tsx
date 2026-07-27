@@ -1,12 +1,13 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Link2, Plus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CurrencyHero } from '@/components/dashboard/currency-hero';
 import { WeeklyChart } from '@/components/dashboard/weekly-chart';
 import { StatusBadge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { Notice, PageHead } from '@/components/ui/page-head';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney, typeLabel } from '@/lib/format';
@@ -42,16 +43,16 @@ export default function DashboardPage() {
   const totalUsd =
     Number(usd?.available ?? 0) + (usdVesRate ? Number(ves?.available ?? 0) / usdVesRate : 0);
 
-  const recent = transactions.slice(0, 3);
+  const recent = transactions.slice(0, 4);
 
   return (
-    <div className="flex flex-col gap-[18px]">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-extrabold tracking-tight text-[var(--text-strong)]">Resumen</h1>
-        <span className="text-[13px] text-[var(--text-subtle)]">{today ? `Hoy · ${today}` : ''}</span>
-      </div>
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Resumen"
+        action={today ? <span className="label">{today}</span> : undefined}
+      />
 
-      {error ? <p className="text-sm text-[var(--destructive)]">{error}</p> : null}
+      {error ? <Notice kind="err">{error}</Notice> : null}
 
       <CurrencyHero
         usdAvailable={Number(usd?.available ?? 0)}
@@ -60,120 +61,114 @@ export default function DashboardPage() {
         rate={usdVesRate}
       />
 
-      {/* Payment links CTA — surfaces the headline capability on the landing screen */}
+      {/* Payment links are the headline capability — a typographic row, not a
+          gradient promo card. The CTA names the destination. */}
       <Link
         href="/links"
-        className="group flex items-center gap-4 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--blue-100)] p-5 transition-shadow hover:shadow-[var(--shadow-md)]"
-        style={{ background: 'var(--gradient-brand-soft)' }}
+        className="group flex items-center justify-between gap-[var(--space-sm)] rounded-[var(--radius-md)] border border-[var(--color-rule)] bg-[var(--color-surface)] p-[var(--space-sm)] transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-accent)]"
       >
-        <span
-          className="flex size-11 flex-none items-center justify-center rounded-[12px] text-white"
-          style={{ background: 'var(--gradient-brand)', boxShadow: 'var(--glow-brand)' }}
-        >
-          <Link2 size={20} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-bold text-[var(--text-strong)]">Cobra con un link de pago</div>
-          <div className="text-[13px] text-[var(--text-muted)]">
-            Compártelo o incrústalo en tu web — tus clientes pagan con Pago Móvil, transferencia, USDT o tarjeta.
+        <div className="min-w-0">
+          <div className="text-[length:var(--text-base)] font-medium text-[var(--color-ink)]">
+            Cobra con un link de pago
+          </div>
+          <div className="mt-0.5 text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+            Pago Móvil, transferencia, USDT o tarjeta — sin que el cliente salga de tu web.
           </div>
         </div>
-        <span className="flex flex-none items-center gap-1.5 rounded-[var(--radius-pill)] bg-white px-4 py-2 text-[13px] font-bold text-[var(--blue-700)] shadow-[var(--shadow-xs)] transition-transform group-hover:translate-x-0.5">
-          <Plus size={15} /> Crear link
+        <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[length:var(--text-sm)] font-medium text-[var(--color-accent)]">
+          Crear link
+          <ArrowRight
+            size={14}
+            className="transition-transform duration-[var(--dur-fast)] group-hover:translate-x-0.5"
+          />
         </span>
       </Link>
 
-      {/* Chart + recent activity */}
-      <div className="grid gap-[18px] lg:grid-cols-[1.9fr_1fr]">
+      <div className="grid gap-[var(--space-md)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <WeeklyChart />
 
-        <Card className="p-[22px]">
-          <CardContent className="p-0">
-            <div className="mb-4 text-[15px] font-bold text-[var(--text-strong)]">
-              Actividad reciente
-            </div>
-            {recent.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">Sin movimientos</p>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {recent.map((t) => {
-                  const isPayin = t.type === 'PAYIN';
-                  return (
-                    <div
-                      key={t.id}
-                      className="flex items-center gap-3 rounded-[var(--radius-sm)] p-2.5 transition-colors hover:bg-[var(--ink-50)]"
+        <Card className="flex flex-col p-[var(--space-md)]">
+          <h2 className="text-[length:var(--text-md)]">Actividad reciente</h2>
+          {recent.length === 0 ? (
+            <p className="py-[var(--space-lg)] text-center text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+              Sin movimientos todavía.
+            </p>
+          ) : (
+            <ul className="mt-[var(--space-xs)] divide-y divide-[var(--color-rule)]">
+              {recent.map((t) => {
+                const isPayin = t.type === 'PAYIN';
+                return (
+                  <li key={t.id} className="flex items-center gap-2.5 py-2.5">
+                    <span
+                      className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--color-rule)] text-[var(--color-ink-3)]"
+                      aria-hidden
                     >
-                      <span
-                        className={`flex size-[34px] flex-none items-center justify-center rounded-[10px] ${
-                          isPayin
-                            ? 'bg-[var(--blue-100)] text-[var(--blue-700)]'
-                            : 'bg-[var(--violet-100)] text-[var(--violet-600)]'
-                        }`}
-                      >
-                        {isPayin ? <ArrowDown size={17} /> : <ArrowUp size={17} />}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-bold text-[var(--text-strong)]">
-                          {typeLabel(t.type)}
-                        </div>
-                        <div className="truncate text-xs text-[var(--text-subtle)]">
-                          {t.customerName ?? t.description ?? t.reference.slice(0, 12)}
-                        </div>
+                      {isPayin ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[length:var(--text-sm)] text-[var(--color-ink)]">
+                        {typeLabel(t.type)}
                       </div>
-                      <div className="text-right">
-                        <div className="font-mono text-[13px] font-semibold text-[var(--text-strong)]">
-                          {formatMoney(t.amount, t.currency)}
-                        </div>
-                        <div className="mt-1">
-                          <StatusBadge status={t.status} />
-                        </div>
+                      <div className="truncate text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                        {t.customerName ?? t.description ?? t.reference.slice(0, 14)}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
+                    <div className="shrink-0 text-right">
+                      <div className="num text-[length:var(--text-sm)] text-[var(--color-ink)]">
+                        {formatMoney(t.amount, t.currency)}
+                      </div>
+                      <div className="mt-1">
+                        <StatusBadge status={t.status} />
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Card>
       </div>
 
-      {/* Transactions table */}
-      <Card className="p-[22px]">
-        <CardContent className="p-0">
-          <div className="mb-3.5 text-[15px] font-bold text-[var(--text-strong)]">
-            Últimas transacciones
-          </div>
-          <Table>
-            <TableHeader>
+      <Card className="p-[var(--space-md)]">
+        <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Últimas transacciones</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tipo</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+              <TableHead className="text-right">USD equiv.</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Fecha</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {transactions.length === 0 ? (
               <TableRow>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Monto</TableHead>
-                <TableHead>USD equiv.</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Fecha</TableHead>
+                <TableCell colSpan={5} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
+                  Sin transacciones.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.map((t) => (
+            ) : (
+              transactions.map((t) => (
                 <TableRow key={t.id}>
-                  <TableCell className="font-bold text-[var(--text-strong)]">
-                    {typeLabel(t.type)}
+                  <TableCell className="text-[var(--color-ink)]">{typeLabel(t.type)}</TableCell>
+                  <TableCell className="num text-right text-[var(--color-ink)]">
+                    {formatMoney(t.amount, t.currency)}
                   </TableCell>
-                  <TableCell className="font-mono">{formatMoney(t.amount, t.currency)}</TableCell>
-                  <TableCell className="font-mono text-[var(--text-muted)]">
+                  <TableCell className="num text-right">
                     {t.usdEquivalent ? formatMoney(t.usdEquivalent, 'USD') : '—'}
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={t.status} />
                   </TableCell>
-                  <TableCell className="text-right text-[var(--text-muted)]">
+                  <TableCell className="whitespace-nowrap text-right text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
                     {formatDate(t.createdAt)}
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </Card>
     </div>
   );

@@ -1,117 +1,131 @@
-import { Card, CardContent } from '@/components/ui/card';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { api } from '@/lib/api-client';
 import { formatMoney } from '@/lib/format';
+import type { Transaction } from '@/lib/types';
 
-// Mock weekly sales (USD). Decoupled placeholder — swap for a real series later.
-const DATA = [
-  { day: 'Lun', value: 1200 },
-  { day: 'Mar', value: 1800 },
-  { day: 'Mié', value: 900 },
-  { day: 'Jue', value: 2400 },
-  { day: 'Vie', value: 2100 },
-  { day: 'Sáb', value: 3200 },
-  { day: 'Dom', value: 1500 },
-];
+const DAYS = 7;
 
-const W = 600;
-const H = 220;
-const PAD_X = 10;
-const TOP = 30;
-const BOTTOM = 200;
-
-function points(): { x: number; y: number }[] {
-  const max = Math.max(...DATA.map((d) => d.value));
-  const span = DATA.length - 1;
-  return DATA.map((d, i) => ({
-    x: PAD_X + (i / span) * (W - PAD_X * 2),
-    y: BOTTOM - (d.value / max) * (BOTTOM - TOP),
-  }));
+interface Bucket {
+  key: string;
+  label: string;
+  total: number;
 }
 
-// Smooth S-curve through the points using horizontal-midpoint cubic controls.
-function smoothPath(pts: { x: number; y: number }[]): string {
-  return pts.reduce((acc, p, i) => {
-    if (i === 0) return `M${p.x},${p.y}`;
-    const prev = pts[i - 1];
-    const midX = (prev.x + p.x) / 2;
-    return `${acc} C${midX},${prev.y} ${midX},${p.y} ${p.x},${p.y}`;
-  }, '');
+/** Local-calendar day key, so a 23:00 payment lands on the day the merchant saw it. */
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Seven empty buckets, oldest first, ending today. */
+function emptyWeek(): Bucket[] {
+  const fmt = new Intl.DateTimeFormat('es-VE', { weekday: 'short' });
+  return Array.from({ length: DAYS }, (_, i) => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - (DAYS - 1 - i));
+    return { key: dayKey(d), label: fmt.format(d).replace('.', ''), total: 0 };
+  });
+}
+
+/** USD value of a transaction — usdEquivalent when the backend computed one. */
+function usdValue(t: Transaction): number {
+  if (t.usdEquivalent) return Number(t.usdEquivalent);
+  return t.currency === 'USD' ? Number(t.amount) : 0;
 }
 
 export function WeeklyChart() {
-  const pts = points();
-  const line = smoothPath(pts);
-  const area = `${line} L${pts[pts.length - 1].x},${H} L${pts[0].x},${H} Z`;
-  const last = pts[pts.length - 1];
-  const total = DATA.reduce((sum, d) => sum + d.value, 0);
+  const [buckets, setBuckets] = useState<Bucket[] | null>(null);
+  const [truncated, setTruncated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    from.setDate(from.getDate() - (DAYS - 1));
+
+    // ponytail: derives the series client-side from the transaction list the API
+    // already exposes. Ceiling is the endpoint's take=100 cap — a merchant doing
+    // >100 pay-ins a week would see a partial week, which is why `truncated`
+    // renders a warning rather than silently under-reporting. Upgrade path: a
+    // GET /transactions/daily-volume aggregate on the backend.
+    api
+      .getTransactions({
+        type: 'PAYIN',
+        status: 'COMPLETED',
+        from: from.toISOString(),
+        take: '100',
+      })
+      .then((rows) => {
+        setTruncated(rows.length >= 100);
+        const week = emptyWeek();
+        const byKey = new Map(week.map((b) => [b.key, b]));
+        for (const t of rows) {
+          const b = byKey.get(dayKey(new Date(t.createdAt)));
+          if (b) b.total += usdValue(t);
+        }
+        setBuckets(week);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Error'));
+  }, []);
+
+  const total = buckets?.reduce((s, b) => s + b.total, 0) ?? 0;
+  const max = Math.max(...(buckets?.map((b) => b.total) ?? [0]), 0);
 
   return (
-    <Card className="p-6">
-      <CardContent className="p-0">
-        <div className="mb-[18px] flex items-center justify-between">
-          <div>
-            <div className="text-[15px] font-bold text-[var(--text-strong)]">Ventas de la semana</div>
-            <div className="text-[12.5px] text-[var(--text-subtle)]">USD · últimos 7 días</div>
-          </div>
-          <div className="text-right">
-            <div className="font-mono text-lg font-semibold text-[var(--text-strong)]">
-              {formatMoney(total, 'USD')}
-            </div>
-            <div className="text-[11px] font-bold text-[var(--success-600)]">
-              ▲ {DATA.length} días
-            </div>
-          </div>
+    <Card className="flex flex-col p-[var(--space-md)]">
+      <div className="mb-[var(--space-md)] flex items-start justify-between gap-[var(--space-sm)]">
+        <div>
+          <h2 className="text-[length:var(--text-md)]">Pagos recibidos</h2>
+          <p className="label pt-1">USD · últimos {DAYS} días</p>
         </div>
-
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          preserveAspectRatio="none"
-          className="block h-[190px] w-full"
-          role="img"
-          aria-label="Gráfico de área de ventas semanales en USD"
-        >
-          <defs>
-            <linearGradient id="areaA" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2F7BF6" stopOpacity="0.34" />
-              <stop offset="100%" stopColor="#9F4DFA" stopOpacity="0.02" />
-            </linearGradient>
-            <linearGradient id="lineA" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#1DC8FE" />
-              <stop offset="55%" stopColor="#2F7BF6" />
-              <stop offset="100%" stopColor="#9F4DFA" />
-            </linearGradient>
-          </defs>
-
-          <line x1="0" y1="60" x2={W} y2="60" stroke="#EEF1F6" strokeWidth="1" />
-          <line x1="0" y1="130" x2={W} y2="130" stroke="#EEF1F6" strokeWidth="1" />
-
-          <path d={area} fill="url(#areaA)" />
-          <path
-            d={line}
-            fill="none"
-            stroke="url(#lineA)"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            style={{ strokeDasharray: 1400, animation: 'drawLine 1.5s cubic-bezier(.2,.8,.2,1) .2s both' }}
-          />
-
-          {/* Pulsing endpoint */}
-          <circle
-            cx={last.x}
-            cy={last.y}
-            r="11"
-            fill="#9F4DFA"
-            opacity="0.18"
-            style={{ transformBox: 'fill-box', transformOrigin: 'center', animation: 'ring 1.8s ease-out 1.2s infinite' }}
-          />
-          <circle cx={last.x} cy={last.y} r="5" fill="#fff" stroke="#9F4DFA" strokeWidth="3" />
-        </svg>
-
-        <div className="mt-2.5 flex justify-between text-xs font-semibold text-[var(--text-subtle)]">
-          {DATA.map((d) => (
-            <span key={d.day}>{d.day}</span>
-          ))}
+        <div className="text-right">
+          <div className="num text-[length:var(--text-lg)] font-medium text-[var(--color-ink)]">
+            {buckets ? formatMoney(total, 'USD') : '—'}
+          </div>
+          <p className="label pt-1">Total cobrado</p>
         </div>
-      </CardContent>
+      </div>
+
+      {error ? (
+        <p className="py-[var(--space-lg)] text-center text-[length:var(--text-sm)] text-[var(--color-bad)]">
+          {error}
+        </p>
+      ) : !buckets ? (
+        <p className="py-[var(--space-lg)] text-center">
+          <span className="label">Cargando</span>
+        </p>
+      ) : max === 0 ? (
+        <p className="py-[var(--space-lg)] text-center text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+          Sin pagos completados en los últimos {DAYS} días.
+        </p>
+      ) : (
+        <ul className="flex h-[168px] items-end gap-1.5" role="list">
+          {buckets.map((b) => {
+            const pct = max ? (b.total / max) * 100 : 0;
+            return (
+              <li key={b.key} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2">
+                <div
+                  className="w-full rounded-t-[var(--radius-xs)] bg-[var(--color-accent)]"
+                  // Zero days keep a 2px stub so the axis stays legible.
+                  style={{ height: `max(2px, ${pct}%)`, opacity: b.total ? 1 : 0.25 }}
+                  role="img"
+                  aria-label={`${b.label}: ${formatMoney(b.total, 'USD')}`}
+                />
+                <span className="label text-center">{b.label}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {truncated ? (
+        <p className="mt-[var(--space-xs)] text-[length:var(--text-xs)] text-[var(--color-warn)]">
+          Mostrando las primeras 100 transacciones del período — el total puede ser mayor.
+        </p>
+      ) : null}
     </Card>
   );
 }

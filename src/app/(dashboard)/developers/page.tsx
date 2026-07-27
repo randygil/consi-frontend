@@ -1,11 +1,13 @@
 'use client';
 
-import { Copy, Eye, EyeOff, RefreshCw, BookOpen, Key, Terminal, Shield, Sparkles, Smartphone, CreditCard, HelpCircle, Code2, Link2, Check, ArrowRight } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Notice, PageHead } from '@/components/ui/page-head';
+import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate } from '@/lib/format';
@@ -18,7 +20,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       type="button"
       variant="outline"
       size="icon"
-      className="size-8 rounded-md hover:bg-[var(--blue-50)] hover:text-[var(--blue-700)] transition-colors"
+      className="size-8 rounded-md hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)] transition-colors"
       onClick={() => {
         navigator.clipboard.writeText(value);
         setCopied(true);
@@ -26,8 +28,38 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       }}
       aria-label={`Copiar ${label}`}
     >
-      {copied ? <Check size={14} className="text-[var(--success-600)]" /> : <Copy size={14} />}
+      {copied ? <Check size={14} className="text-[var(--color-ok)]" /> : <Copy size={14} />}
     </Button>
+  );
+}
+
+/** Same chip recipe as StatusBadge, over webhook delivery states. */
+function DeliveryBadge({ status }: { status: WebhookDelivery['status'] }) {
+  const { label, tone } = {
+    DELIVERED: { label: 'Entregado', tone: 'bg-[var(--color-ok-soft)] text-[var(--color-ok)]' },
+    FAILED: { label: 'Fallido', tone: 'bg-[var(--color-bad-soft)] text-[var(--color-bad)]' },
+    PENDING: { label: 'Pendiente', tone: 'bg-[var(--color-warn-soft)] text-[var(--color-warn)]' },
+  }[status];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] ${tone}`}
+    >
+      <span className="size-1.5 rounded-full bg-current" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+/** A named snippet on a graphite ground — the docs family's repeating unit. */
+function SnippetCard({ title, note, code }: { title: string; note: string; code: string }) {
+  return (
+    <div className="rounded-[var(--radius-md)] border border-[var(--color-rule)] bg-[var(--color-surface)] p-[var(--space-sm)]">
+      <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">{title}</p>
+      <p className="mt-1 text-[length:var(--text-xs)] text-[var(--color-ink-3)]">{note}</p>
+      <pre className="mt-2 overflow-x-auto whitespace-pre rounded-[var(--radius-sm)] bg-[var(--color-graphite)] p-2.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] leading-relaxed text-[var(--color-on-graphite)]">
+        {code}
+      </pre>
+    </div>
   );
 }
 
@@ -35,10 +67,10 @@ function SecretRow({ label, value, secret = false }: { label: string; value: str
   const [revealed, setRevealed] = useState(false);
   const display = secret && !revealed ? '•'.repeat(Math.min(value.length, 32)) : value;
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">{label}</Label>
+    <div className="flex flex-col gap-1.5">
+      <Label>{label}</Label>
       <div className="flex gap-2">
-        <Input readOnly value={display} className="font-mono text-xs bg-[var(--ink-50)] border-[var(--border)] focus:ring-1 focus:ring-[var(--blue-400)]" />
+        <Input readOnly value={display} className="num" />
         {secret ? (
           <Button
             type="button"
@@ -108,62 +140,120 @@ function SignatureGenerator({ keys }: { keys: ApiKeys | null }) {
   }, [apiKeyInput, secretInput, orderInput, amountInput, currencyInput]);
 
   return (
-    <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--ink-50)] space-y-4">
-      <div className="flex items-center gap-2 text-sm font-bold text-[var(--text-strong)]">
-        <Sparkles size={16} className="text-[var(--blue-500)]" />
-        <span>Generador de Firma HMAC Interactivo</span>
+    <div className="flex flex-col gap-[var(--space-sm)] rounded-[var(--radius-md)] border border-[var(--color-rule)] p-[var(--space-sm)]">
+      <div>
+        <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">
+          Generador de firma HMAC
+        </p>
+        <p className="mt-1 text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+          Escribe tus credenciales y los campos de la orden para ver cómo se arma la firma que
+          va en las cabeceras HTTP. Todo se calcula en tu navegador.
+        </p>
       </div>
-      <p className="text-xs text-[var(--text-muted)]">
-        Ingresa tus credenciales y los campos del dinero de tu orden para ver exactamente cómo se genera la firma digital para las cabeceras HTTP.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">API Key</label>
-          <Input value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="font-mono text-xs bg-white" placeholder="apiKeyTest_..." />
+
+      <div className="grid gap-[var(--space-xs)] md:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="hmac-key">API Key</Label>
+          <Input
+            id="hmac-key"
+            value={apiKeyInput}
+            onChange={(e) => setApiKeyInput(e.target.value)}
+            className="num"
+            placeholder="apiKeyTest_…"
+          />
         </div>
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">API Secret</label>
-          <Input type="password" value={secretInput} onChange={(e) => setSecretInput(e.target.value)} className="font-mono text-xs bg-white" placeholder="apiSecretTest_..." />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="hmac-secret">API Secret</Label>
+          <Input
+            id="hmac-secret"
+            type="password"
+            value={secretInput}
+            onChange={(e) => setSecretInput(e.target.value)}
+            className="num"
+            placeholder="apiSecretTest_…"
+          />
         </div>
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Order ID</label>
-          <Input value={orderInput} onChange={(e) => setOrderInput(e.target.value)} className="font-mono text-xs bg-white" />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="hmac-order">Order ID</Label>
+          <Input
+            id="hmac-order"
+            value={orderInput}
+            onChange={(e) => setOrderInput(e.target.value)}
+            className="num"
+          />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Amount</label>
-            <Input value={amountInput} onChange={(e) => setAmountInput(e.target.value)} className="font-mono text-xs bg-white" />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="hmac-amount">Monto</Label>
+            <Input
+              id="hmac-amount"
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
+              className="num"
+            />
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Currency</label>
-            <select value={currencyInput} onChange={(e) => setCurrencyInput(e.target.value)} className="w-full h-[38px] rounded-md border border-[var(--border)] px-3 text-xs bg-white font-mono">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="hmac-cur">Moneda</Label>
+            <Select
+              id="hmac-cur"
+              value={currencyInput}
+              onChange={(e) => setCurrencyInput(e.target.value)}
+              className="num"
+            >
               <option value="USD">USD</option>
               <option value="VES">VES</option>
-            </select>
+            </Select>
           </div>
         </div>
       </div>
-      <div className="pt-2 border-t border-[var(--border)]">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase text-[var(--text-muted)]">Cadena a Firmar (Concatenada)</span>
-          <span className="font-mono text-[10px] text-[var(--blue-600)]">apiKey|order|amount|currency</span>
+
+      <div className="border-t border-[var(--color-rule)] pt-[var(--space-xs)]">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="label">Cadena a firmar</span>
+          <span className="label normal-case">apiKey|order|amount|currency</span>
         </div>
-        <pre className="mt-1 p-2 rounded-md bg-white border border-[var(--border)] font-mono text-[11px] overflow-x-auto text-[var(--text-strong)]">
+        <pre className="mt-1.5 overflow-x-auto rounded-[var(--radius-sm)] bg-[var(--color-graphite)] p-2.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] text-[var(--color-on-graphite)]">
           {`${apiKeyInput || 'API_KEY'}|${orderInput}|${amountInput}|${currencyInput}`}
         </pre>
       </div>
+
       <div>
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase text-[var(--text-muted)]">Firma HMAC-SHA256 Resultante (x-signature)</span>
-        </div>
-        <div className="mt-1 flex gap-2">
-          <Input readOnly value={signatureOutput} className="font-mono text-xs bg-white border-[var(--border)] text-[var(--blue-700)] font-semibold" />
+        <Label htmlFor="hmac-out">Firma HMAC-SHA256 · x-signature</Label>
+        <div className="mt-1.5 flex gap-2">
+          <Input
+            id="hmac-out"
+            readOnly
+            value={signatureOutput}
+            className="num text-[var(--color-accent)]"
+          />
           <CopyButton value={signatureOutput} label="firma calculada" />
         </div>
       </div>
     </div>
   );
 }
+
+type DocSection = 'intro' | 'auth' | 'hmac' | 'checkout' | 'endpoints' | 'webhooks' | 'testing';
+
+const DOC_GROUPS: { title: string; items: { id: DocSection; label: string }[] }[] = [
+  {
+    title: 'Integración',
+    items: [
+      { id: 'intro', label: 'Introducción' },
+      { id: 'auth', label: 'Autenticación' },
+      { id: 'hmac', label: 'Firma HMAC' },
+      { id: 'checkout', label: 'Checkout' },
+    ],
+  },
+  {
+    title: 'Referencia',
+    items: [
+      { id: 'endpoints', label: 'Endpoints' },
+      { id: 'webhooks', label: 'Webhooks' },
+      { id: 'testing', label: 'Pruebas y sandbox' },
+    ],
+  },
+];
 
 export default function DevelopersPage() {
   const [keys, setKeys] = useState<ApiKeys | null>(null);
@@ -173,7 +263,7 @@ export default function DevelopersPage() {
   const [mainTab, setMainTab] = useState<'keys' | 'docs'>('keys');
 
   // Documentation states
-  const [docSection, setDocSection] = useState<'intro' | 'auth' | 'hmac' | 'checkout' | 'endpoints' | 'webhooks' | 'testing'>('intro');
+  const [docSection, setDocSection] = useState<DocSection>('intro');
   const [codeLang, setCodeLang] = useState<'curl' | 'js' | 'python' | 'php'>('curl');
 
   const load = () =>
@@ -618,59 +708,46 @@ if (hash_equals($expected, $signature)) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-strong)] flex items-center gap-2">
-            <Code2 className="text-[var(--blue-500)]" />
-            <span>Desarrolladores & Integración</span>
-          </h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            Accede a tus credenciales de API y consulta la guía interactiva para conectar Consi.
-          </p>
-        </div>
-
-        {/* Tab Selector */}
-        <div className="flex bg-[var(--ink-100)] p-1 rounded-xl w-fit">
-          <button
-            onClick={() => setMainTab('keys')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              mainTab === 'keys'
-                ? 'bg-white shadow-[var(--shadow-xs)] text-[var(--blue-700)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
-            }`}
+      <PageHead
+        title="Desarrolladores"
+        lede="Tus credenciales de API y la guía de integración de Consi."
+        action={
+          <div
+            role="group"
+            aria-label="Vista"
+            className="flex rounded-[var(--radius-sm)] border border-[var(--color-rule)] p-0.5"
           >
-            <Key size={14} />
-            <span>Claves y Webhooks</span>
-          </button>
-          <button
-            onClick={() => setMainTab('docs')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              mainTab === 'docs'
-                ? 'bg-white shadow-[var(--shadow-xs)] text-[var(--blue-700)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
-            }`}
-          >
-            <BookOpen size={14} />
-            <span>Documentación de API</span>
-          </button>
-        </div>
-      </div>
+            {(
+              [
+                { id: 'keys', label: 'Claves' },
+                { id: 'docs', label: 'Documentación' },
+              ] as const
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setMainTab(id)}
+                aria-pressed={mainTab === id}
+                className={`rounded-[var(--radius-xs)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] transition-colors duration-[var(--dur-fast)] ${
+                  mainTab === id
+                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-ink)]'
+                    : 'text-[var(--color-ink-4)] hover:text-[var(--color-ink)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
-      {status ? (
-        <div className="p-3 rounded-lg bg-[var(--success-100)] text-[var(--success-600)] text-xs font-bold">
-          {status}
-        </div>
-      ) : null}
+      {status ? <Notice kind="ok">{status}</Notice> : null}
 
       {/* VIEW: KEYS AND WEBHOOKS */}
       {mainTab === 'keys' && (
         <div className="space-y-6">
-          <Card className="border-[var(--border)] shadow-[var(--shadow-sm)]">
+          <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
-                <Key size={16} className="text-[var(--blue-500)]" />
-                <span>Credenciales de API</span>
-              </CardTitle>
+              <CardTitle>Credenciales de API</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {keys ? (
@@ -681,7 +758,8 @@ if (hash_equals($expected, $signature)) {
                     <SecretRow label="API Key (Live)" value={keys.apiKeyLive} />
                     <SecretRow label="API Secret (Live)" value={keys.apiSecretLive} secret />
                   </div>
-                  <div className="flex gap-2 pt-2">
+                  {/* Wraps rather than overhanging the card at 320px. */}
+                  <div className="flex flex-wrap gap-2 pt-2">
                     <Button variant="outline" size="sm" onClick={() => regenerate('TEST')} className="text-xs">
                       <RefreshCw size={14} className="mr-1.5" /> Regenerar Test
                     </Button>
@@ -691,32 +769,29 @@ if (hash_equals($expected, $signature)) {
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-[var(--muted-foreground)]">Cargando credenciales…</p>
+                <p className="text-sm text-[var(--color-ink-3)]">Cargando credenciales…</p>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border-[var(--border)] shadow-[var(--shadow-sm)]">
+          <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
-                <Terminal size={16} className="text-[var(--blue-500)]" />
-                <span>Configuración de Webhook</span>
-              </CardTitle>
+              <CardTitle>Configuración de Webhook</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={saveWebhook} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="webhook" className="text-xs font-bold text-[var(--text-strong)]">URL del Webhook de tu Servidor</Label>
+                  <Label htmlFor="webhook" className="text-xs font-bold text-[var(--color-ink)]">URL del Webhook de tu Servidor</Label>
                   <Input
                     id="webhook"
                     type="url"
                     placeholder="https://tu-servidor.com/webhooks/consi"
                     value={webhookUrl}
                     onChange={(e) => setWebhookUrl(e.target.value)}
-                    className="max-w-xl font-mono text-sm border-[var(--border)]"
+                    className="max-w-xl font-mono text-sm border-[var(--color-rule)]"
                   />
-                  <p className="text-xs text-[var(--text-subtle)]">
-                    Consi enviará peticiones HTTP POST firmadas con eventos del estado de las transacciones (ej. <code className="bg-[var(--ink-100)] px-1 rounded">transaction.completed</code>) a este endpoint.
+                  <p className="text-xs text-[var(--color-ink-4)]">
+                    Consi enviará peticiones HTTP POST firmadas con eventos del estado de las transacciones (ej. <code className="bg-[var(--color-paper-3)] px-1 rounded">transaction.completed</code>) a este endpoint.
                   </p>
                 </div>
                 <Button type="submit" className="text-xs font-bold px-4 py-2">Guardar Endpoint</Button>
@@ -724,53 +799,46 @@ if (hash_equals($expected, $signature)) {
             </CardContent>
           </Card>
 
-          <Card className="border-[var(--border)] shadow-[var(--shadow-sm)]">
+          <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-bold text-[var(--text-strong)] flex items-center gap-2">
-                <ArrowRight size={16} className="text-[var(--blue-500)]" />
-                <span>Historial de Entregas de Webhook</span>
-              </CardTitle>
+              <CardTitle>Historial de Entregas de Webhook</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table className="border border-[var(--border)] rounded-xl overflow-hidden">
-                <TableHeader className="bg-[var(--ink-50)]">
+              <Table className="border border-[var(--color-rule)] rounded-xl overflow-hidden">
+                <TableHeader className="bg-[var(--color-paper-3)]">
                   <TableRow>
-                    <TableHead className="font-bold text-[var(--text-strong)]">Evento</TableHead>
-                    <TableHead className="font-bold text-[var(--text-strong)]">Estado</TableHead>
-                    <TableHead className="font-bold text-[var(--text-strong)]">Intentos</TableHead>
-                    <TableHead className="font-bold text-[var(--text-strong)]">Último error</TableHead>
-                    <TableHead className="font-bold text-[var(--text-strong)]">Fecha</TableHead>
+                    <TableHead className="font-bold text-[var(--color-ink)]">Evento</TableHead>
+                    <TableHead className="font-bold text-[var(--color-ink)]">Estado</TableHead>
+                    <TableHead className="font-bold text-[var(--color-ink)]">Intentos</TableHead>
+                    <TableHead className="font-bold text-[var(--color-ink)]">Último error</TableHead>
+                    <TableHead className="font-bold text-[var(--color-ink)]">Fecha</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {deliveries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6 text-[var(--text-subtle)] font-medium">
+                      <TableCell colSpan={5} className="text-center py-6 text-[var(--color-ink-4)] font-medium">
                         Sin notificaciones enviadas aún
                       </TableCell>
                     </TableRow>
                   ) : (
                     deliveries.map((d) => (
-                      <TableRow key={d.id} className="hover:bg-[var(--ink-50)] transition-colors">
-                        <TableCell className="font-mono text-xs font-semibold">{d.event}</TableCell>
-                        <TableCell>
-                          <span
-                            className={
-                              d.status === 'DELIVERED'
-                                ? 'inline-flex items-center rounded-full bg-[var(--success-100)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--success-600)]'
-                                : d.status === 'FAILED'
-                                  ? 'inline-flex items-center rounded-full bg-[var(--danger-100)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--danger-600)]'
-                                  : 'inline-flex items-center rounded-full bg-[var(--warning-100)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--warning-600)]'
-                            }
-                          >
-                            {d.status === 'DELIVERED' ? 'Completado' : d.status === 'FAILED' ? 'Fallido' : 'Pendiente'}
-                          </span>
+                      <TableRow key={d.id}>
+                        <TableCell className="num text-[length:var(--text-xs)] text-[var(--color-ink)]">
+                          {d.event}
                         </TableCell>
-                        <TableCell className="text-xs font-semibold text-[var(--text-strong)]">{d.attempts}/{d.maxAttempts}</TableCell>
-                        <TableCell className="max-w-xs truncate text-[var(--text-muted)] text-xs font-mono">
+                        <TableCell>
+                          <DeliveryBadge status={d.status} />
+                        </TableCell>
+                        <TableCell className="num text-[length:var(--text-xs)]">
+                          {d.attempts}/{d.maxAttempts}
+                        </TableCell>
+                        <TableCell className="num max-w-xs truncate text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
                           {d.lastError ?? '—'}
                         </TableCell>
-                        <TableCell className="text-[var(--text-subtle)] text-xs">{formatDate(d.createdAt)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                          {formatDate(d.createdAt)}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -785,76 +853,42 @@ if (hash_equals($expected, $signature)) {
       {mainTab === 'docs' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* COLUMN 1: SIDEBAR NAV (Col 1-3) */}
-          <div className="lg:col-span-3 space-y-1 bg-white p-3 rounded-xl border border-[var(--border)] shadow-[var(--shadow-xs)] sticky top-6">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)] px-3 mb-2">Integración Básica</div>
-            <button
-              onClick={() => setDocSection('intro')}
-              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-                docSection === 'intro' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
-              }`}
-            >
-              <HelpCircle size={14} /> Introducción
-            </button>
-            <button
-              onClick={() => setDocSection('auth')}
-              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-                docSection === 'auth' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
-              }`}
-            >
-              <Shield size={14} /> Autenticación
-            </button>
-            <button
-              onClick={() => setDocSection('hmac')}
-              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-                docSection === 'hmac' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
-              }`}
-            >
-              <Terminal size={14} /> Firma HMAC
-            </button>
-            <button
-              onClick={() => setDocSection('checkout')}
-              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-                docSection === 'checkout' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
-              }`}
-            >
-              <Link2 size={14} /> Checkout (Hosted/Drop-in)
-            </button>
-
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)] px-3 mt-4 mb-2">Referencia de API</div>
-            <button
-              onClick={() => setDocSection('endpoints')}
-              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-                docSection === 'endpoints' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
-              }`}
-            >
-              <Code2 size={14} /> Endpoints Públicos
-            </button>
-            <button
-              onClick={() => setDocSection('webhooks')}
-              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-                docSection === 'webhooks' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
-              }`}
-            >
-              <ArrowRight size={14} /> Webhooks
-            </button>
-            <button
-              onClick={() => setDocSection('testing')}
-              className={`w-full text-left px-3 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 ${
-                docSection === 'testing' ? 'bg-[var(--blue-50)] text-[var(--blue-700)] font-bold' : 'text-[var(--text-body)] hover:bg-[var(--ink-50)]'
-              }`}
-            >
-              <Sparkles size={14} /> Pruebas y Sandbox
-            </button>
-          </div>
+          {/* COLUMN 1: SECTION INDEX (Col 1-3) */}
+          <nav
+            aria-label="Secciones de la documentación"
+            className="flex flex-col gap-0.5 lg:col-span-3 lg:sticky lg:top-[var(--space-md)]"
+          >
+            {DOC_GROUPS.map((group) => (
+              <div key={group.title} className="flex flex-col gap-0.5">
+                <div className="label px-2 pb-1 pt-2.5 first:pt-0">{group.title}</div>
+                {group.items.map(({ id, label }) => {
+                  const active = docSection === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => setDocSection(id)}
+                      aria-current={active ? 'true' : undefined}
+                      className={`flex items-center rounded-[var(--radius-sm)] px-2.5 py-1.5 text-left text-[length:var(--text-sm)] transition-colors duration-[var(--dur-fast)] ${
+                        active
+                          ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                          : 'text-[var(--color-ink-3)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-ink)]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
 
           {/* COLUMN 2: GUIDES (Col 4-8) */}
-          <div className="lg:col-span-5 space-y-6 text-sm text-[var(--text-body)] leading-relaxed">
+          <div className="lg:col-span-5 space-y-6 text-sm text-[var(--color-ink-2)] leading-relaxed">
             
             {/* SECTION: INTRO */}
             {docSection === 'intro' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-[var(--text-strong)]">Introducción</h2>
+                <h2 className="text-xl font-bold text-[var(--color-ink)]">Introducción</h2>
                 <p>
                   Bienvenido a la API de <strong>Consi</strong>. Nuestra plataforma permite a empresas en Venezuela integrar cobros automatizados de forma rápida, segura y multi-moneda (USD y VES) empleando métodos tradicionales y alternativos.
                 </p>
@@ -863,7 +897,7 @@ if (hash_equals($expected, $signature)) {
                 </p>
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>Hosted Checkout (Links de pago):</strong> Redirecciona a tu cliente a una página alojada de Consi para pagar. Es el camino más rápido, sin código en frontend.</li>
-                  <li><strong>Embedded Checkout (Modal):</strong> Usa nuestra librería JavaScript <code className="bg-[var(--ink-100)] px-1 rounded font-mono text-xs">consi.js</code> para abrir una ventana modal directamente en tu aplicación, manteniendo la experiencia in-app.</li>
+                  <li><strong>Embedded Checkout (Modal):</strong> Usa nuestra librería JavaScript <code className="rounded-[var(--radius-xs)] bg-[var(--color-paper-3)] px-1 font-[family-name:var(--font-mono)] text-[length:var(--text-xs)] text-[var(--color-ink)]">consi.js</code> para abrir una ventana modal directamente en tu aplicación, manteniendo la experiencia in-app.</li>
                   <li><strong>Server-to-Server API (Directa):</strong> Crea cobros directamente desde tu backend, permitiendo construir tus propias experiencias y canalizar la confirmación mediante webhooks.</li>
                 </ul>
               </div>
@@ -872,48 +906,49 @@ if (hash_equals($expected, $signature)) {
             {/* SECTION: AUTH */}
             {docSection === 'auth' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-[var(--text-strong)]">Autenticación</h2>
+                <h2 className="text-xl font-bold text-[var(--color-ink)]">Autenticación</h2>
                 <p>
-                  La comunicación con la API pública de Consi se realiza bajo HTTPS y se autentica mediante la cabecera HTTP <code className="bg-[var(--ink-100)] px-1 rounded font-mono text-xs">x-api-key</code>.
+                  La comunicación con la API pública de Consi se realiza bajo HTTPS y se autentica mediante la cabecera HTTP <code className="rounded-[var(--radius-xs)] bg-[var(--color-paper-3)] px-1 font-[family-name:var(--font-mono)] text-[length:var(--text-xs)] text-[var(--color-ink)]">x-api-key</code>.
                 </p>
                 <p>
                   Cada comercio dispone de dos juegos de llaves accesibles desde la pestaña <strong>Claves y Webhooks</strong>:
                 </p>
                 <div className="grid grid-cols-1 gap-2">
-                  <div className="p-3 border border-[var(--border)] rounded-lg bg-[var(--ink-50)]">
-                    <span className="font-bold text-[var(--text-strong)] block text-xs">Ambiente de Pruebas (Test):</span>
+                  <div className="p-3 border border-[var(--color-rule)] rounded-lg bg-[var(--color-paper-3)]">
+                    <span className="font-bold text-[var(--color-ink)] block text-xs">Ambiente de Pruebas (Test):</span>
                     <span className="text-xs font-mono">x-api-key: c_test_...</span>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Usa esta clave para hacer simulaciones sin alterar dinero real ni cuentas bancarias.</p>
+                    <p className="text-xs text-[var(--color-ink-3)] mt-1">Usa esta clave para hacer simulaciones sin alterar dinero real ni cuentas bancarias.</p>
                   </div>
-                  <div className="p-3 border border-[var(--border)] rounded-lg bg-[var(--ink-50)]">
-                    <span className="font-bold text-[var(--text-strong)] block text-xs">Ambiente de Producción (Live):</span>
+                  <div className="p-3 border border-[var(--color-rule)] rounded-lg bg-[var(--color-paper-3)]">
+                    <span className="font-bold text-[var(--color-ink)] block text-xs">Ambiente de Producción (Live):</span>
                     <span className="text-xs font-mono">x-api-key: c_live_...</span>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Usa esta clave en tu producción real para recibir cobros reales.</p>
+                    <p className="text-xs text-[var(--color-ink-3)] mt-1">Usa esta clave en tu producción real para recibir cobros reales.</p>
                   </div>
                 </div>
-                <div className="p-3 bg-[var(--warning-100)] border border-[var(--warning-600)] text-[var(--warning-600)] rounded-lg text-xs font-semibold">
-                  ⚠️ NUNCA expongas tus API Secrets (claves privadas) en código de frontend o repositorios públicos.
-                </div>
+                <Notice kind="warn">
+                  Nunca expongas un API Secret en código de frontend ni en un repositorio
+                  público. Fírmalo siempre desde tu servidor.
+                </Notice>
               </div>
             )}
 
             {/* SECTION: HMAC SIGNATURE */}
             {docSection === 'hmac' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-[var(--text-strong)]">Firma HMAC y Seguridad</h2>
+                <h2 className="text-xl font-bold text-[var(--color-ink)]">Firma HMAC y Seguridad</h2>
                 <p>
-                  Para garantizar la integridad y evitar que los campos sensibles (como el monto o la moneda) sean alterados en tránsito, Consi requiere una firma digital en las peticiones que creen recursos (<code className="bg-[var(--ink-100)] px-1 rounded font-mono text-xs">POST</code>).
+                  Para garantizar la integridad y evitar que los campos sensibles (como el monto o la moneda) sean alterados en tránsito, Consi requiere una firma digital en las peticiones que creen recursos (<code className="rounded-[var(--radius-xs)] bg-[var(--color-paper-3)] px-1 font-[family-name:var(--font-mono)] text-[length:var(--text-xs)] text-[var(--color-ink)]">POST</code>).
                 </p>
                 <p>
-                  Esta firma debe enviarse en la cabecera <code className="bg-[var(--ink-100)] px-1 rounded font-mono text-xs">x-signature</code>.
+                  Esta firma debe enviarse en la cabecera <code className="rounded-[var(--radius-xs)] bg-[var(--color-paper-3)] px-1 font-[family-name:var(--font-mono)] text-[length:var(--text-xs)] text-[var(--color-ink)]">x-signature</code>.
                 </p>
                 <div className="space-y-2">
-                  <h3 className="font-bold text-[var(--text-strong)]">Cómo Calcular la Firma:</h3>
+                  <h3 className="font-bold text-[var(--color-ink)]">Cómo Calcular la Firma:</h3>
                   <ol className="list-decimal pl-5 space-y-2 text-xs">
-                    <li>Concatena los valores requeridos en el orden exacto separados por tuberías (<code className="bg-[var(--ink-100)] px-1 rounded">|</code>): <br />
-                      <code className="bg-[var(--ink-100)] p-1 rounded block mt-1 font-mono text-[11px] text-[var(--blue-700)]">apiKey|order|amount|currency</code>
+                    <li>Concatena los valores requeridos en el orden exacto separados por tuberías (<code className="bg-[var(--color-paper-3)] px-1 rounded">|</code>): <br />
+                      <code className="mt-1 block rounded-[var(--radius-xs)] bg-[var(--color-paper-3)] p-1 font-[family-name:var(--font-mono)] text-[length:var(--text-xs)] text-[var(--color-accent)]">apiKey|order|amount|currency</code>
                     </li>
-                    <li>Utiliza tu clave secreta de API (<code className="bg-[var(--ink-100)] px-1 rounded">apiSecret</code>) correspondiente como clave de firma.</li>
+                    <li>Utiliza tu clave secreta de API (<code className="bg-[var(--color-paper-3)] px-1 rounded">apiSecret</code>) correspondiente como clave de firma.</li>
                     <li>Calcula el hash <strong>HMAC-SHA256</strong> sobre la cadena del paso 1 y codifícalo como cadena hexadecimal (hex).</li>
                   </ol>
                 </div>
@@ -926,25 +961,25 @@ if (hash_equals($expected, $signature)) {
             {/* SECTION: CHECKOUT EMBED */}
             {docSection === 'checkout' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-[var(--text-strong)]">Hosted Checkout & Embedded Iframe</h2>
+                <h2 className="text-xl font-bold text-[var(--color-ink)]">Hosted Checkout & Embedded Iframe</h2>
                 <p>
                   Consi ofrece una interfaz interactiva de pagos ya construida que le permite al pagador elegir entre <strong>Pago Móvil, Transferencias, Tarjetas o USDT (criptomonedas)</strong>.
                 </p>
                 
-                <h3 className="font-bold text-[var(--text-strong)] mt-2">1. Flujo Redireccionado (Hosted)</h3>
+                <h3 className="font-bold text-[var(--color-ink)] mt-2">1. Flujo Redireccionado (Hosted)</h3>
                 <p>
-                  Consiste en crear un enlace de pago desde tu backend y redireccionar al usuario a la propiedad <code className="bg-[var(--ink-100)] px-1 rounded">url</code> devuelta en la respuesta de la API. Cuando se confirma la liquidación, el usuario es redirigido a la URL especificada en <code className="bg-[var(--ink-100)] px-1 rounded">successUrl</code>.
+                  Consiste en crear un enlace de pago desde tu backend y redireccionar al usuario a la propiedad <code className="bg-[var(--color-paper-3)] px-1 rounded">url</code> devuelta en la respuesta de la API. Cuando se confirma la liquidación, el usuario es redirigido a la URL especificada en <code className="bg-[var(--color-paper-3)] px-1 rounded">successUrl</code>.
                 </p>
 
-                <h3 className="font-bold text-[var(--text-strong)] mt-2">2. Checkout Incrustado (Drop-in Modal)</h3>
+                <h3 className="font-bold text-[var(--color-ink)] mt-2">2. Checkout Incrustado (Drop-in Modal)</h3>
                 <p>
                   Mediante nuestra librería, puedes desplegar la ventana de cobro Consi en un modal iframe directamente sobre tu web sin redirigir al cliente.
                 </p>
-                <div className="p-3 border border-[var(--border)] rounded-lg space-y-1">
-                  <span className="font-bold text-[var(--text-strong)] block text-xs">Pasos de uso:</span>
+                <div className="p-3 border border-[var(--color-rule)] rounded-lg space-y-1">
+                  <span className="font-bold text-[var(--color-ink)] block text-xs">Pasos de uso:</span>
                   <ol className="list-decimal pl-4 text-xs space-y-1">
                     <li>Incrusta la etiqueta script de consi.js una sola vez.</li>
-                    <li>Invoca <code className="font-mono bg-[var(--ink-100)] px-1 rounded text-xs">Consi.checkout(...)</code> indicando el token del pago y el callback de éxito.</li>
+                    <li>Invoca <code className="font-mono bg-[var(--color-paper-3)] px-1 rounded text-xs">Consi.checkout(...)</code> indicando el token del pago y el callback de éxito.</li>
                   </ol>
                 </div>
               </div>
@@ -953,35 +988,35 @@ if (hash_equals($expected, $signature)) {
             {/* SECTION: ENDPOINTS REFERENCE */}
             {docSection === 'endpoints' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-[var(--text-strong)]">Referencia de la API Pública</h2>
+                <h2 className="text-xl font-bold text-[var(--color-ink)]">Referencia de la API Pública</h2>
                 <p>
-                  A continuación se documentan los endpoints públicos expuestos para comercios. El servidor escucha en el puerto <code className="font-mono bg-[var(--ink-100)] px-1 rounded text-xs">http://localhost:4000/api</code>.
+                  A continuación se documentan los endpoints públicos expuestos para comercios. El servidor escucha en el puerto <code className="font-mono bg-[var(--color-paper-3)] px-1 rounded text-xs">http://localhost:4000/api</code>.
                 </p>
 
                 {/* Sub-nav of endpoints to click and highlight code */}
                 <div className="space-y-3">
-                  <div className="p-3 border border-[var(--border)] rounded-lg hover:border-[var(--blue-400)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
-                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 rounded-md uppercase font-mono mr-2">POST</span>
-                    <code className="font-mono text-xs font-bold text-[var(--text-strong)]">/payment</code>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Crea una transacción directa de pago PENDING en el sistema. Requiere firma HMAC.</p>
+                  <div className="p-3 border border-[var(--color-rule)] rounded-lg hover:border-[var(--color-accent)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
+                    <span className="mr-2 inline-block rounded-[var(--radius-xs)] bg-[var(--color-ok-soft)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-ok)]">POST</span>
+                    <code className="font-mono text-xs font-bold text-[var(--color-ink)]">/payment</code>
+                    <p className="text-xs text-[var(--color-ink-3)] mt-1">Crea una transacción directa de pago PENDING en el sistema. Requiere firma HMAC.</p>
                   </div>
                   
-                  <div className="p-3 border border-[var(--border)] rounded-lg hover:border-[var(--blue-400)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
-                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 rounded-md uppercase font-mono mr-2">POST</span>
-                    <code className="font-mono text-xs font-bold text-[var(--text-strong)]">/payment/links</code>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Crea programáticamente un link de pago público (Stripe Checkout) y retorna la URL. Requiere firma HMAC.</p>
+                  <div className="p-3 border border-[var(--color-rule)] rounded-lg hover:border-[var(--color-accent)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
+                    <span className="mr-2 inline-block rounded-[var(--radius-xs)] bg-[var(--color-ok-soft)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-ok)]">POST</span>
+                    <code className="font-mono text-xs font-bold text-[var(--color-ink)]">/payment/links</code>
+                    <p className="text-xs text-[var(--color-ink-3)] mt-1">Crea programáticamente un link de pago público (Stripe Checkout) y retorna la URL. Requiere firma HMAC.</p>
                   </div>
 
-                  <div className="p-3 border border-[var(--border)] rounded-lg hover:border-[var(--blue-400)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
-                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-md uppercase font-mono mr-2">GET</span>
-                    <code className="font-mono text-xs font-bold text-[var(--text-strong)]">/payment/:reference</code>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Recupera los detalles y estado del pago usando la referencia única de Consi. Sin firma HMAC.</p>
+                  <div className="p-3 border border-[var(--color-rule)] rounded-lg hover:border-[var(--color-accent)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
+                    <span className="mr-2 inline-block rounded-[var(--radius-xs)] bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-accent)]">GET</span>
+                    <code className="font-mono text-xs font-bold text-[var(--color-ink)]">/payment/:reference</code>
+                    <p className="text-xs text-[var(--color-ink-3)] mt-1">Recupera los detalles y estado del pago usando la referencia única de Consi. Sin firma HMAC.</p>
                   </div>
 
-                  <div className="p-3 border border-[var(--border)] rounded-lg hover:border-[var(--blue-400)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
-                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-md uppercase font-mono mr-2">GET</span>
-                    <code className="font-mono text-xs font-bold text-[var(--text-strong)]">/payment/order/:orderId</code>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Recupera los detalles y estado del pago usando tu ID de orden de comercio. Sin firma HMAC.</p>
+                  <div className="p-3 border border-[var(--color-rule)] rounded-lg hover:border-[var(--color-accent)] transition-colors cursor-pointer" onClick={() => setDocSection('endpoints')}>
+                    <span className="mr-2 inline-block rounded-[var(--radius-xs)] bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-accent)]">GET</span>
+                    <code className="font-mono text-xs font-bold text-[var(--color-ink)]">/payment/order/:orderId</code>
+                    <p className="text-xs text-[var(--color-ink-3)] mt-1">Recupera los detalles y estado del pago usando tu ID de orden de comercio. Sin firma HMAC.</p>
                   </div>
                 </div>
               </div>
@@ -990,14 +1025,14 @@ if (hash_equals($expected, $signature)) {
             {/* SECTION: WEBHOOKS */}
             {docSection === 'webhooks' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-[var(--text-strong)]">Webhooks y Notificaciones</h2>
+                <h2 className="text-xl font-bold text-[var(--color-ink)]">Webhooks y Notificaciones</h2>
                 <p>
                   Los webhooks permiten recibir actualizaciones del estado de un pago de forma asíncrona. Cuando el pago se completa (o falla), Consi realiza una llamada POST HTTP a la URL de webhook configurada.
                 </p>
                 <div className="space-y-2">
-                  <h3 className="font-bold text-[var(--text-strong)]">Cabeceras enviadas:</h3>
+                  <h3 className="font-bold text-[var(--color-ink)]">Cabeceras enviadas:</h3>
                   <ul className="list-disc pl-5 text-xs space-y-1 font-mono">
-                    <li><strong>x-consi-event:</strong> El nombre del evento (ej: <code className="bg-slate-100 px-1 rounded">transaction.completed</code>)</li>
+                    <li><strong>x-consi-event:</strong> El nombre del evento (ej: <code className="rounded-[var(--radius-xs)] bg-[var(--color-paper-3)] px-1 font-[family-name:var(--font-mono)] text-[length:var(--text-xs)]">transaction.completed</code>)</li>
                     <li><strong>x-webhook-signature:</strong> La firma HMAC-SHA256 generada sobre el cuerpo JSON plano utilizando tu API Secret como clave de firma.</li>
                   </ul>
                 </div>
@@ -1010,14 +1045,14 @@ if (hash_equals($expected, $signature)) {
             {/* SECTION: TESTING / SANDBOX */}
             {docSection === 'testing' && (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold text-[var(--text-strong)]">Pruebas en Sandbox</h2>
+                <h2 className="text-xl font-bold text-[var(--color-ink)]">Pruebas en Sandbox</h2>
                 <p>
-                  Durante las pruebas con la clave de prueba (<code className="bg-[var(--ink-100)] px-1 rounded">c_test_...</code>), puedes forzar el estado de tus transacciones usando las siguientes credenciales simuladas en la interfaz de pago:
+                  Durante las pruebas con la clave de prueba (<code className="bg-[var(--color-paper-3)] px-1 rounded">c_test_...</code>), puedes forzar el estado de tus transacciones usando las siguientes credenciales simuladas en la interfaz de pago:
                 </p>
                 
-                <h3 className="font-bold text-[var(--text-strong)] text-xs uppercase tracking-wider text-[var(--text-subtle)]">1. Tarjetas de Prueba (CARD)</h3>
-                <Table className="border border-[var(--border)] text-xs rounded-lg overflow-hidden">
-                  <TableHeader className="bg-[var(--ink-50)]">
+                <h3 className="font-bold text-[var(--color-ink)] text-xs uppercase tracking-wider text-[var(--color-ink-4)]">1. Tarjetas de Prueba (CARD)</h3>
+                <Table className="border border-[var(--color-rule)] text-xs rounded-lg overflow-hidden">
+                  <TableHeader className="bg-[var(--color-paper-3)]">
                     <TableRow>
                       <TableHead>Número</TableHead>
                       <TableHead>Fecha</TableHead>
@@ -1030,124 +1065,91 @@ if (hash_equals($expected, $signature)) {
                       <TableCell className="font-mono">4242 •••• •••• 4242</TableCell>
                       <TableCell className="font-mono">12/29</TableCell>
                       <TableCell className="font-mono">123</TableCell>
-                      <TableCell className="text-[var(--success-600)] font-bold">Aprobado inmediato</TableCell>
+                      <TableCell className="text-[var(--color-ok)] font-bold">Aprobado inmediato</TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
 
-                <h3 className="font-bold text-[var(--text-strong)] text-xs uppercase tracking-wider text-[var(--text-subtle)] mt-2">2. Pago Móvil de Prueba (PAGO_MOVIL)</h3>
+                <h3 className="font-bold text-[var(--color-ink)] text-xs uppercase tracking-wider text-[var(--color-ink-4)] mt-2">2. Pago Móvil de Prueba (PAGO_MOVIL)</h3>
                 <p className="text-xs">
-                  Para el pago móvil en el ambiente sandbox, las transferencias son simuladas. El sistema te mostrará los datos de destino del comercio. Al realizar el pago ficticio, introduce cualquier referencia de banco de 6 a 10 dígitos (ej. <code className="bg-[var(--ink-100)] px-1 rounded font-mono">239485</code>) para simular la confirmación asíncrona.
+                  Para el pago móvil en el ambiente sandbox, las transferencias son simuladas. El sistema te mostrará los datos de destino del comercio. Al realizar el pago ficticio, introduce cualquier referencia de banco de 6 a 10 dígitos (ej. <code className="rounded-[var(--radius-xs)] bg-[var(--color-paper-3)] px-1 font-[family-name:var(--font-mono)] text-[length:var(--text-xs)] text-[var(--color-ink)]">239485</code>) para simular la confirmación asíncrona.
                 </p>
               </div>
             )}
 
           </div>
 
-          {/* COLUMN 3: CODE SNIPPET TERMINAL (Col 9-12) */}
-          <div className="lg:col-span-4 space-y-4">
-            <div className="rounded-xl border border-[var(--ink-950)] bg-[var(--ink-900)] text-[var(--ink-100)] shadow-[var(--shadow-md)] overflow-hidden font-mono text-[11px]">
-              
-              {/* Terminal Header */}
-              <div className="bg-[var(--ink-950)] px-4 py-3 flex items-center justify-between border-b border-[var(--ink-900)]">
-                <div className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-[#ff5f56]" />
-                  <span className="size-2.5 rounded-full bg-[#ffbd2e]" />
-                  <span className="size-2.5 rounded-full bg-[#27c93f]" />
-                  <span className="ml-2 text-xs font-semibold text-[var(--text-subtle)]">Petición HTTP</span>
+          {/* COLUMN 3: REQUEST / RESPONSE (Col 9-12) */}
+          <div className="lg:col-span-4 flex flex-col gap-[var(--space-sm)] lg:sticky lg:top-[var(--space-md)]">
+            {(() => {
+              const block = docSection === 'webhooks' ? codeBlocks.webhooks : codeBlocks.payment;
+              return (
+                <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-graphite-rule)] bg-[var(--color-graphite)]">
+                  {/* No fake window chrome — a real label row instead. */}
+                  <div className="flex items-center justify-between gap-2 border-b border-[var(--color-graphite-rule)] px-3 py-2">
+                    <span className="font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-on-graphite-3)]">
+                      Petición
+                    </span>
+                    <div className="flex gap-0.5">
+                      {(['curl', 'js', 'python', 'php'] as const).map((lang) => (
+                        <button
+                          key={lang}
+                          onClick={() => setCodeLang(lang)}
+                          aria-pressed={codeLang === lang}
+                          className={`rounded-[var(--radius-xs)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] transition-colors duration-[var(--dur-fast)] ${
+                            codeLang === lang
+                              ? 'bg-[var(--color-graphite-2)] text-[var(--color-accent-on-graphite)]'
+                              : 'text-[var(--color-on-graphite-3)] hover:text-[var(--color-on-graphite)]'
+                          }`}
+                        >
+                          {lang}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="group relative max-h-[360px] overflow-auto p-3">
+                    <pre className="whitespace-pre text-left font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] leading-relaxed text-[var(--color-on-graphite)]">
+                      {block.req}
+                    </pre>
+                    <div className="absolute right-2 top-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                      <CopyButton value={block.req} label="código" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 border-y border-[var(--color-graphite-rule)] px-3 py-2">
+                    <span className="font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-on-graphite-3)]">
+                      Respuesta
+                    </span>
+                    <span className="rounded-[var(--radius-xs)] bg-[var(--color-graphite-2)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] tracking-[var(--tracking-mono-label)] text-[var(--color-accent-on-graphite)]">
+                      200 OK
+                    </span>
+                  </div>
+
+                  <div className="max-h-[220px] overflow-auto p-3">
+                    <pre className="whitespace-pre text-left font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] leading-relaxed text-[var(--color-tok-str)]">
+                      {block.res}
+                    </pre>
+                  </div>
                 </div>
-                
-                {/* Language tabs */}
-                <div className="flex bg-[var(--ink-900)] p-0.5 rounded-md border border-[var(--border)]/10 text-[9px] font-bold">
-                  {(['curl', 'js', 'python', 'php'] as const).map((lang) => (
-                    <button
-                      key={lang}
-                      onClick={() => setCodeLang(lang)}
-                      className={`px-1.5 py-0.5 rounded ${
-                        codeLang === lang ? 'bg-[var(--blue-600)] text-white' : 'text-[var(--text-subtle)] hover:text-white'
-                      }`}
-                    >
-                      {lang.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              );
+            })()}
 
-              {/* Snippet Code Area */}
-              <div className="p-4 overflow-x-auto max-h-[360px] bg-[var(--ink-950)] relative group">
-                <pre className="text-left text-green-400 whitespace-pre leading-relaxed font-mono">
-                  {docSection === 'intro' || docSection === 'auth' || docSection === 'hmac' || docSection === 'checkout'
-                    ? codeBlocks.payment.req
-                    : docSection === 'endpoints'
-                    ? codeBlocks.payment.req
-                    : docSection === 'webhooks'
-                    ? codeBlocks.webhooks.req
-                    : codeBlocks.payment.req
-                  }
-                </pre>
-                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <CopyButton
-                    value={
-                      docSection === 'intro' || docSection === 'auth' || docSection === 'hmac' || docSection === 'checkout'
-                        ? codeBlocks.payment.req
-                        : docSection === 'endpoints'
-                        ? codeBlocks.payment.req
-                        : docSection === 'webhooks'
-                        ? codeBlocks.webhooks.req
-                        : codeBlocks.payment.req
-                    }
-                    label="código"
-                  />
-                </div>
-              </div>
+            {docSection === 'endpoints' ? (
+              <SnippetCard
+                title="Crear un link de pago"
+                note="Genera un link alojado desde tu backend y compártelo con el cliente."
+                code={codeBlocks.paymentLink.req}
+              />
+            ) : null}
 
-              {/* Endpoint response header */}
-              <div className="bg-[var(--ink-950)] px-4 py-2 border-t border-[var(--ink-900)] flex items-center justify-between text-xs font-semibold text-[var(--text-subtle)]">
-                <span>Respuesta HTTP 200 OK</span>
-              </div>
-
-              {/* JSON Response Area */}
-              <div className="p-4 bg-[var(--ink-950)] overflow-x-auto max-h-[220px] border-t border-[var(--ink-900)] text-blue-300">
-                <pre className="text-left whitespace-pre font-mono leading-relaxed">
-                  {docSection === 'intro' || docSection === 'auth' || docSection === 'hmac' || docSection === 'checkout'
-                    ? codeBlocks.payment.res
-                    : docSection === 'endpoints'
-                    ? codeBlocks.payment.res
-                    : docSection === 'webhooks'
-                    ? codeBlocks.webhooks.res
-                    : codeBlocks.payment.res
-                  }
-                </pre>
-              </div>
-
-            </div>
-
-            {/* Programmatic Payment Link Snippet (Conditional helper card) */}
-            {docSection === 'endpoints' && (
-              <div className="rounded-xl border border-[var(--border)] p-4 bg-white space-y-2">
-                <span className="text-xs font-bold text-[var(--text-strong)] block">Creación de Enlaces (Hosted Links)</span>
-                <p className="text-[11px] text-[var(--text-muted)]">
-                  Puedes alternar los snippets para probar el endpoint de creación de links de pago haciendo clic abajo:
-                </p>
-                <div className="rounded-lg border border-[var(--border)] p-2 bg-[var(--ink-50)] text-[10px] font-mono whitespace-pre overflow-x-auto">
-                  {codeBlocks.paymentLink.req}
-                </div>
-              </div>
-            )}
-
-            {/* Retrieve Status snippet (Conditional helper card) */}
-            {(docSection === 'endpoints' || docSection === 'intro') && (
-              <div className="rounded-xl border border-[var(--border)] p-4 bg-white space-y-2">
-                <span className="text-xs font-bold text-[var(--text-strong)] block">Consulta de Transacción</span>
-                <p className="text-[11px] text-[var(--text-muted)]">
-                  Puedes consultar el estado en tiempo real mediante la referencia única o el orderId de tu tienda:
-                </p>
-                <div className="rounded-lg border border-[var(--border)] p-2 bg-[var(--ink-50)] text-[10px] font-mono whitespace-pre overflow-x-auto">
-                  {codeBlocks.retrieve.req}
-                </div>
-              </div>
-            )}
-
+            {docSection === 'endpoints' || docSection === 'intro' ? (
+              <SnippetCard
+                title="Consultar una transacción"
+                note="Consulta el estado en tiempo real por referencia o por tu orderId."
+                code={codeBlocks.retrieve.req}
+              />
+            ) : null}
           </div>
 
         </div>

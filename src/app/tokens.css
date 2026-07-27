@@ -1,0 +1,153 @@
+/* Hallmark · Consi design tokens · theme: Cobalt (light + dark)
+ * genre: modern-minimal · design-system: design.md · designed-as-app
+ *
+ * Cool engineered paper, cool charcoal ink, exactly ONE electric cobalt signal.
+ * Hairlines carry structure — no drop shadows, no gradients, no colored glow.
+ * Graphite is reserved for two focal surfaces: the balance readout and code cards.
+ *
+ * Contrast: every ink/accent pairing below is verified ≥4.5:1 for body text and
+ * ≥3:1 for focus rings and non-text indicators, in BOTH modes. If you add a
+ * value, verify it — don't eyeball OKLCH lightness, it is perceptual, not luminance.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- Paper (page ground → raised surface → sunken/hover) ---- */
+  --color-paper: oklch(98.5% 0.004 250);
+  --color-surface: oklch(99.6% 0.002 250);
+  --color-paper-3: oklch(96.4% 0.005 252);
+
+  /* ---- Ink ramp ---- */
+  --color-ink: oklch(24% 0.02 258); /* headings */
+  --color-ink-2: oklch(34% 0.018 257); /* body            ~11:1 */
+  --color-ink-3: oklch(48% 0.016 256); /* muted body      ~4.8:1 */
+  --color-ink-4: oklch(56% 0.014 256); /* meta labels     ~3.5:1, never body copy */
+
+  /* ---- Hairlines ---- */
+  --color-rule: oklch(91% 0.006 252);
+  --color-rule-2: oklch(85% 0.008 252);
+
+  /* ---- The one signal ----
+   * accent        = fills + accent text. White on it ~4.6:1; on paper ~4.5:1.
+   * accent-bright = indicators, focus rings, chart strokes (3:1 surfaces only).
+   * Never use accent-bright for small text. */
+  --color-accent: oklch(50% 0.2 257);
+  --color-accent-bright: oklch(60% 0.2 255);
+  --color-accent-hover: oklch(44% 0.19 258);
+  --color-accent-ink: oklch(99% 0.01 256);
+  --color-accent-soft: oklch(95% 0.028 256);
+  --color-focus: oklch(60% 0.2 255);
+
+  /* ---- Graphite (balance readout + code cards) ---- */
+  --color-graphite: oklch(22% 0.016 260);
+  --color-graphite-2: oklch(27% 0.018 260);
+  --color-graphite-rule: oklch(33% 0.018 260);
+  --color-on-graphite: oklch(94% 0.006 250);
+  --color-on-graphite-2: oklch(78% 0.01 252);
+  --color-on-graphite-3: oklch(62% 0.012 254);
+  --color-accent-on-graphite: oklch(74% 0.16 254);
+
+  /* ---- Status ---- */
+  --color-ok: oklch(48% 0.13 152);
+  --color-ok-soft: oklch(94% 0.04 152);
+  --color-warn: oklch(52% 0.13 70);
+  --color-warn-soft: oklch(95% 0.05 80);
+  --color-bad: oklch(51% 0.19 27);
+  --color-bad-soft: oklch(94% 0.04 25);
+
+  /* ---- Code (graphite cards) ---- */
+  --color-tok-str: oklch(80% 0.11 155); /* JSON response bodies */
+
+  /* ---- Overlay ---- */
+  --color-scrim: oklch(15% 0.01 260 / 0.45);
+
+  /* ---- Type ---- */
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-display: clamp(2.25rem, 4vw + 1rem, 3.5rem);
+
+  --tracking-display: -0.022em;
+  --tracking-mono-label: 0.06em;
+
+  /* ---- Spacing · 4-pt ---- */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+  --space-3xl: 7rem;
+
+  /* ---- Radii · drawn with a ruler ---- */
+  --radius-xs: 4px;
+  --radius-sm: 6px; /* controls */
+  --radius-md: 8px;
+  --radius-lg: 10px; /* code + readout cards */
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-short: 220ms;
+  --dur-med: 380ms;
+
+  /* ---- Layout ---- */
+  --rail-w: 244px;
+  --header-h: 60px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-paper: oklch(17% 0.014 260);
+  --color-surface: oklch(21% 0.016 260);
+  --color-paper-3: oklch(25% 0.016 260);
+
+  --color-ink: oklch(95% 0.005 250);
+  --color-ink-2: oklch(86% 0.008 252);
+  --color-ink-3: oklch(68% 0.012 254);
+  --color-ink-4: oklch(56% 0.012 255);
+
+  --color-rule: oklch(30% 0.014 258);
+  --color-rule-2: oklch(38% 0.015 258);
+
+  --color-accent: oklch(70% 0.16 254);
+  --color-accent-bright: oklch(74% 0.16 254);
+  --color-accent-hover: oklch(78% 0.14 254);
+  --color-accent-ink: oklch(16% 0.02 260);
+  --color-accent-soft: oklch(29% 0.06 256);
+  --color-focus: oklch(74% 0.16 254);
+
+  /* Code cards sink BELOW the page in dark mode instead of rising above it. */
+  --color-graphite: oklch(12.5% 0.012 262);
+  --color-graphite-2: oklch(17% 0.014 261);
+  --color-graphite-rule: oklch(26% 0.015 260);
+  --color-on-graphite: oklch(92% 0.006 250);
+  --color-on-graphite-2: oklch(74% 0.01 252);
+  --color-on-graphite-3: oklch(58% 0.012 254);
+
+  --color-ok: oklch(76% 0.15 152);
+  --color-ok-soft: oklch(28% 0.05 152);
+  --color-warn: oklch(80% 0.13 80);
+  --color-warn-soft: oklch(30% 0.05 70);
+  --color-bad: oklch(72% 0.16 25);
+  --color-bad-soft: oklch(29% 0.07 25);
+
+  /* Darker scrim — the dark palette has less contrast to spare behind a modal. */
+  --color-scrim: oklch(8% 0.008 260 / 0.6);
+}

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/components/auth-provider';
 import { Header } from '@/components/dashboard/header';
-import { Sidebar } from '@/components/dashboard/sidebar';
+import { MERCHANT_NAV, MobileNav, Sidebar } from '@/components/dashboard/sidebar';
 
 function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -19,8 +19,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-[var(--muted-foreground)]">
-        Cargando…
+      <div className="flex min-h-screen items-center justify-center">
+        <span className="label">Cargando</span>
       </div>
     );
   }
@@ -28,9 +28,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <MobileNav items={MERCHANT_NAV} />
+        <main className="flex-1 overflow-x-clip p-[var(--space-sm)] lg:p-[var(--space-md)]">
+          {children}
+        </main>
       </div>
     </div>
   );

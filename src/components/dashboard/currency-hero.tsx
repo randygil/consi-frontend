@@ -1,5 +1,6 @@
 import { ArrowLeftRight } from 'lucide-react';
-import { formatMoney } from '@/lib/format';
+import { GraphiteCard } from '@/components/ui/card';
+import { formatMoney, formatRate } from '@/lib/format';
 
 interface CurrencyHeroProps {
   usdAvailable: number;
@@ -10,72 +11,77 @@ interface CurrencyHeroProps {
 }
 
 /**
- * USD ⇄ VES converter hero — Midnight's "saldo" layout rendered on Aurora's
- * gradient-mesh surface. USD balance · live BCV swap node · VES balance.
+ * The page's one dark beat: a graphite instrument readout carrying both wallet
+ * balances and the live BCV rate between them. Everything is mono and tabular —
+ * these are the numbers the merchant is actually here to read.
  */
 export function CurrencyHero({
   usdAvailable,
   vesAvailable,
   totalUsd,
   rate,
-  updatedLabel = 'En vivo · BCV',
+  updatedLabel = 'BCV en vivo',
 }: CurrencyHeroProps) {
-  const rateLabel = rate ? rate.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '—';
+  const rateLabel = rate ? formatRate(rate) : '—';
 
   return (
-    <section
-      className="relative flex items-stretch gap-4 overflow-hidden rounded-[var(--radius-xl)] p-6 text-white sm:gap-6 sm:p-7"
-      style={{
-        background: 'var(--gradient-mesh)',
-        boxShadow: 'var(--glow-brand)',
-        animation: 'riseSafe .6s cubic-bezier(.2,.8,.2,1)',
-      }}
-    >
-      {/* Saldo USD */}
-      <div className="flex flex-1 flex-col justify-center">
-        <div className="mb-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-white/60">
-          Saldo USD
-        </div>
-        <div className="font-mono text-3xl font-semibold leading-none tracking-tight sm:text-[34px]">
-          {formatMoney(usdAvailable, 'USD')}
-        </div>
-        <div className="mt-1 text-xs text-white/55">de {formatMoney(totalUsd, 'USD')} total</div>
-      </div>
+    <GraphiteCard className="grid grid-cols-1 divide-y divide-[var(--color-graphite-rule)] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:divide-x sm:divide-y-0">
+      <Balance
+        label="Saldo disponible · USD"
+        value={formatMoney(usdAvailable, 'USD')}
+        note={`de ${formatMoney(totalUsd, 'USD')} total en cartera`}
+      />
 
-      {/* Swap node + live rate */}
-      <div className="flex flex-none flex-col items-center justify-center gap-2 px-1 sm:px-2">
-        <div
-          className="flex size-14 items-center justify-center rounded-full"
-          style={{ background: 'var(--gradient-brand)', boxShadow: 'var(--glow-brand)' }}
-        >
-          <ArrowLeftRight size={24} strokeWidth={2} />
-        </div>
+      <div className="flex items-center justify-center gap-3 px-[var(--space-md)] py-[var(--space-sm)] sm:flex-col sm:gap-2">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-graphite-rule)] bg-[var(--color-graphite-2)] text-[var(--color-on-graphite-2)]">
+          <ArrowLeftRight size={15} />
+        </span>
         <div className="text-center">
-          <div className="font-mono text-base font-semibold leading-tight">{rateLabel}</div>
-          <div className="flex items-center justify-center gap-1.5 text-[10px] tracking-[0.04em] text-white/55">
-            <span className="relative inline-flex size-2">
-              <span
-                className="absolute inset-0 rounded-full"
-                style={{ background: 'var(--accent-pop)', animation: 'pulseDot 1.8s ease-in-out infinite' }}
-              />
-            </span>
-            VES/USD · {updatedLabel}
+          <div className="num text-[length:var(--text-md)] font-medium leading-none text-[var(--color-on-graphite)]">
+            {rateLabel}
+          </div>
+          <div className="mt-1 flex items-center justify-center gap-1.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-on-graphite-3)]">
+            <span
+              className="size-1.5 rounded-full bg-[var(--color-accent-on-graphite)]"
+              aria-hidden
+            />
+            {updatedLabel}
           </div>
         </div>
       </div>
 
-      {/* Saldo VES */}
-      <div className="flex flex-1 flex-col items-end justify-center text-right">
-        <div className="mb-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-white/60">
-          Saldo VES
-        </div>
-        <div className="font-mono text-3xl font-semibold leading-none tracking-tight sm:text-[34px]">
-          {formatMoney(vesAvailable, 'VES')}
-        </div>
-        <div className="mt-1 text-xs text-white/55">
-          ≈ {formatMoney(rate ? vesAvailable / rate : 0, 'USD')}
-        </div>
+      <Balance
+        label="Saldo disponible · VES"
+        value={formatMoney(vesAvailable, 'VES')}
+        note={`≈ ${formatMoney(rate ? vesAvailable / rate : 0, 'USD')}`}
+        align="sm:text-right sm:items-end"
+      />
+    </GraphiteCard>
+  );
+}
+
+function Balance({
+  label,
+  value,
+  note,
+  align = '',
+}: {
+  label: string;
+  value: string;
+  note: string;
+  align?: string;
+}) {
+  return (
+    <div className={`flex min-w-0 flex-col justify-center p-[var(--space-md)] ${align}`}>
+      <div className="font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-on-graphite-3)]">
+        {label}
       </div>
-    </section>
+      <div className="num mt-2 truncate text-[length:var(--text-2xl)] font-medium leading-none text-[var(--color-on-graphite)]">
+        {value}
+      </div>
+      <div className="mt-1.5 truncate text-[length:var(--text-xs)] text-[var(--color-on-graphite-3)]">
+        {note}
+      </div>
+    </div>
   );
 }
