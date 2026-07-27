@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from '@/components/auth-provider';
 import { AdminMobileNav, ADMIN_NAV, AdminSidebar } from '@/components/admin/sidebar';
 import { CommandPalette, type Command } from '@/components/command-palette';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { User } from 'lucide-react';
+import Link from 'next/link';
 
 const COMMANDS: Command[] = ADMIN_NAV.map((n) => ({
   group: 'Ir a',
@@ -14,7 +16,7 @@ const COMMANDS: Command[] = ADMIN_NAV.map((n) => ({
   href: n.href,
 }));
 
-function AdminHeader() {
+function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth();
   return (
     <header className="flex h-[var(--header-h)] shrink-0 items-center justify-between gap-[var(--space-sm)] border-b border-[var(--color-rule)] bg-[var(--color-surface)] px-[var(--space-sm)]">
@@ -37,6 +39,14 @@ function AdminHeader() {
 
       <div className="flex shrink-0 items-center gap-2">
         <CommandPalette commands={COMMANDS} />
+        <Link
+          href="/admin/profile"
+          aria-label="Mi perfil"
+          title="Mi perfil"
+          className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-rule)] text-[var(--color-ink-3)] transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-rule-2)] hover:text-[var(--color-ink)]"
+        >
+          <User size={15} />
+        </Link>
         <ThemeToggle />
         <button
           type="button"
@@ -93,3 +103,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </AuthProvider>
   );
 }
+

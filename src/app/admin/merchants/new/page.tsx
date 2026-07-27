@@ -11,25 +11,15 @@ import { Label } from '@/components/ui/label';
 import { Notice, PageHead } from '@/components/ui/page-head';
 import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api-client';
-import { GATEWAYS, type Environment } from '@/lib/types';
+import { type Environment } from '@/lib/types';
 
 const STEPS = ['Negocio', 'Configuración', 'Usuario', 'Revisión'];
-
-/** Percent string (e.g. "3.5") -> decimal string (e.g. "0.035") for the API. */
-function pctToDecimal(pct: string): string {
-  return String(Number(pct) / 100);
-}
 
 interface FormState {
   businessName: string;
   email: string;
   environment: Environment;
-  payinPct: string; // percent, e.g. "3.5"
-  taxPct: string; // percent, e.g. "16"
-  payoutPct: string; // percent, e.g. "1.5"
-  payoutMinFee: string; // currency, e.g. "0.50"
   retentionDays: string;
-  defaultGateway: string;
   userEmail: string;
   userPassword: string;
 }
@@ -38,12 +28,7 @@ const INITIAL: FormState = {
   businessName: '',
   email: '',
   environment: 'TEST',
-  payinPct: '3.5',
-  taxPct: '16',
-  payoutPct: '1.5',
-  payoutMinFee: '0.50',
   retentionDays: '2',
-  defaultGateway: 'MOCK_BANCAMIGA',
   userEmail: '',
   userPassword: '',
 };
@@ -75,12 +60,7 @@ export default function OnboardMerchantPage() {
         businessName: form.businessName.trim(),
         email: form.email.trim(),
         environment: form.environment,
-        commissionPayinRate: pctToDecimal(form.payinPct),
-        commissionTax: pctToDecimal(form.taxPct),
-        commissionPayoutRate: pctToDecimal(form.payoutPct),
-        commissionPayoutMinFee: form.payoutMinFee,
         retentionDays: Number(form.retentionDays),
-        defaultGateway: form.defaultGateway,
         userEmail: form.userEmail.trim(),
         userPassword: form.userPassword,
       });
@@ -93,7 +73,7 @@ export default function OnboardMerchantPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-[var(--space-md)]">
-      <PageHead title="Nuevo comercio" lede="Cuatro pasos: negocio, comisiones, usuario, revisión." />
+      <PageHead title="Nuevo comercio" lede="Cuatro pasos: negocio, retención, usuario, revisión." />
 
       <Stepper steps={STEPS} current={step} />
 
@@ -129,64 +109,20 @@ export default function OnboardMerchantPage() {
           ) : null}
 
           {step === 1 ? (
-            <div className="grid gap-[var(--space-sm)] sm:grid-cols-2">
-              <Field label="Comisión entrante · %">
-                <Input
-                  type="number"
-                  step="0.1"
-                  className="num"
-                  value={form.payinPct}
-                  onChange={(e) => set('payinPct', e.target.value)}
-                />
-              </Field>
-              <Field label="Impuesto s/ comisión · %">
-                <Input
-                  type="number"
-                  step="0.1"
-                  className="num"
-                  value={form.taxPct}
-                  onChange={(e) => set('taxPct', e.target.value)}
-                />
-              </Field>
-              <Field label="Comisión retiro · %">
-                <Input
-                  type="number"
-                  step="0.1"
-                  className="num"
-                  value={form.payoutPct}
-                  onChange={(e) => set('payoutPct', e.target.value)}
-                />
-              </Field>
-              <Field label="Comisión mínima retiro">
-                <Input
-                  type="number"
-                  step="0.01"
-                  className="num"
-                  value={form.payoutMinFee}
-                  onChange={(e) => set('payoutMinFee', e.target.value)}
-                />
-              </Field>
+            <>
               <Field label="Días de retención">
                 <Input
                   type="number"
-                  className="num"
                   value={form.retentionDays}
                   onChange={(e) => set('retentionDays', e.target.value)}
                 />
               </Field>
-              <Field label="Pasarela por defecto">
-                <Select
-                  value={form.defaultGateway}
-                  onChange={(e) => set('defaultGateway', e.target.value)}
-                >
-                  {GATEWAYS.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+              <p className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+                Las comisiones se configuran por pasarela, no por comercio. Al crear el
+                comercio se habilitan todas las pasarelas del entorno; ajústalas después en
+                el detalle del comercio.
+              </p>
+            </>
           ) : null}
 
           {step === 2 ? (
@@ -215,14 +151,7 @@ export default function OnboardMerchantPage() {
               <Review label="Negocio" value={form.businessName} />
               <Review label="Correo de contacto" value={form.email} />
               <Review label="Entorno" value={form.environment === 'LIVE' ? 'Real' : 'Prueba'} />
-              <Review label="Comisión entrante" value={`${form.payinPct} %`} />
-              <Review label="Impuesto" value={`${form.taxPct} %`} />
-              <Review
-                label="Comisión retiro"
-                value={`${form.payoutPct} % · mín ${form.payoutMinFee}`}
-              />
               <Review label="Retención" value={`${form.retentionDays} días`} />
-              <Review label="Pasarela" value={form.defaultGateway} />
               <Review label="Usuario" value={form.userEmail} />
             </dl>
           ) : null}

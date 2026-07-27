@@ -2,14 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Store, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Network, Store, UserPlus, Users, Wallet } from 'lucide-react';
 import { Wordmark } from '@/components/dashboard/sidebar';
 import { cn } from '@/lib/utils';
 
 export const ADMIN_NAV = [
   { href: '/admin', label: 'Panel', icon: LayoutDashboard, keywords: 'resumen plataforma stats' },
   { href: '/admin/merchants', label: 'Comercios', icon: Store, keywords: 'merchants comercios' },
+  { href: '/admin/users', label: 'Usuarios', icon: Users, keywords: 'users cuentas roles' },
   { href: '/admin/merchants/new', label: 'Onboarding', icon: UserPlus, keywords: 'nuevo alta merchant' },
+  { href: '/admin/gateways', label: 'Pasarelas', icon: Network, keywords: 'gateways comisiones proveedores' },
+  { href: '/ops', label: 'Operaciones', icon: Wallet, keywords: 'ops tesoreria conciliacion' },
 ];
 
 // /admin is exact; nested routes match by prefix (but not the bare panel).

@@ -151,3 +151,125 @@
   /* Darker scrim — the dark palette has less contrast to spare behind a modal. */
   --color-scrim: oklch(8% 0.008 260 / 0.6);
 }
+
+/* ============================================================================
+ * Compatibility layer — legacy InVū/Aurora token names on the Cobalt palette.
+ *
+ * The upstream merge brought ~15 new pages (clientes, disputas, métodos,
+ * pasarelas, ops, perfil, recuperar contraseña…) written against the old token
+ * names. Rather than leave them unstyled, every old name resolves here to its
+ * Cobalt equivalent, so those pages inherit the palette AND dark mode for free.
+ *
+ * Note what this deliberately does: gradients collapse to a flat accent and
+ * every shadow resolves to nothing, because the redesign removed both. A page
+ * written for `background: var(--gradient-brand)` renders a solid accent here.
+ *
+ * These pages are functional and theme-correct, not hand-designed. As each one
+ * gets a proper Cobalt pass, drop its legacy names; when
+ * `grep -rE "var\(--(ink|blue|text-strong|gradient|shadow)" src/` is clean,
+ * delete this whole block.
+ * ==========================================================================*/
+:root,
+[data-theme='dark'] {
+  /* Surfaces */
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --sidebar: var(--color-surface);
+  --sidebar-foreground: var(--color-ink-2);
+  --muted: var(--color-paper-3);
+  --muted-foreground: var(--color-ink-3);
+  --border: var(--color-rule);
+  --input: var(--color-rule);
+  --ring: var(--color-focus);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-accent-ink);
+  --accent: var(--color-accent-soft);
+  --accent-foreground: var(--color-accent);
+  --accent-pop: var(--color-accent);
+  --destructive: var(--color-bad);
+
+  /* Ink ramp */
+  --text-strong: var(--color-ink);
+  --text-body: var(--color-ink-2);
+  --text-muted: var(--color-ink-3);
+  --text-subtle: var(--color-ink-4);
+
+  /* Neutral steps */
+  --ink-50: var(--color-paper-3);
+  --ink-100: var(--color-paper-3);
+  --ink-150: var(--color-rule);
+  --ink-200: var(--color-rule-2);
+  --ink-900: var(--color-graphite);
+  --ink-950: var(--color-graphite);
+
+  /* Blue steps — all collapse onto the single cobalt signal. */
+  --blue-50: var(--color-accent-soft);
+  --blue-100: var(--color-accent-soft);
+  --blue-200: var(--color-rule-2);
+  --blue-300: var(--color-rule-2);
+  --blue-400: var(--color-accent);
+  --blue-500: var(--color-accent);
+  --blue-600: var(--color-accent);
+  --blue-700: var(--color-accent);
+
+  /* Status */
+  --success: var(--color-ok);
+  --success-50: var(--color-ok-soft);
+  --success-100: var(--color-ok-soft);
+  --success-200: var(--color-ok-soft);
+  --success-600: var(--color-ok);
+  --success-700: var(--color-ok);
+  --warning-50: var(--color-warn-soft);
+  --warning-100: var(--color-warn-soft);
+  --warning-200: var(--color-warn-soft);
+  --warning-600: var(--color-warn);
+  --warning-700: var(--color-warn);
+  --warning-800: var(--color-warn);
+  --danger-50: var(--color-bad-soft);
+  --danger-100: var(--color-bad-soft);
+  --danger-200: var(--color-bad-soft);
+  --danger-500: var(--color-bad);
+  --danger-600: var(--color-bad);
+  --danger-700: var(--color-bad);
+  --red-600: var(--color-bad);
+
+  /* Radii the old system had that Cobalt doesn't. */
+  --radius-xl: var(--radius-lg);
+  --radius-pill: 999px;
+
+  /* Gradients flatten; glow and elevation disappear. */
+  --gradient-brand: var(--color-accent);
+  --gradient-brand-soft: var(--color-accent-soft);
+  --gradient-warm: var(--color-accent);
+  --gradient-mesh: var(--color-graphite);
+  --glow-brand: 0 0 #0000;
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --ring-hairline: 0 0 0 1px var(--color-rule);
+}
+
+/* The old hero keyframes are still referenced by pages that came in with the
+ * merge. Kept minimal; the global reduced-motion rule already neutralises them. */
+@keyframes riseSafe {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

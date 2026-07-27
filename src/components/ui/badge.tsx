@@ -10,6 +10,7 @@ import type { TransactionStatus } from '@/lib/types';
 const TONE: Record<TransactionStatus, string> = {
   COMPLETED: 'text-[var(--color-ok)] bg-[var(--color-ok-soft)]',
   PENDING: 'text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
+  AUTHORIZED: 'text-[var(--color-accent)] bg-[var(--color-accent-soft)]',
   FAILED: 'text-[var(--color-bad)] bg-[var(--color-bad-soft)]',
   REFUNDED: 'text-[var(--color-ink-3)] bg-[var(--color-paper-3)]',
   EXPIRED: 'text-[var(--color-ink-3)] bg-[var(--color-paper-3)]',

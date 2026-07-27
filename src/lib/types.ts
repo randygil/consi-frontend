@@ -1,6 +1,7 @@
 export type Currency = 'USD' | 'VES';
 export type Environment = 'TEST' | 'LIVE';
-export type Role = 'MERCHANT' | 'ADMIN';
+export type Role = 'MERCHANT' | 'ADMIN' | 'OPERATIONS';
+export type PayoutMode = 'INSTANT' | 'MANUAL';
 export type TransactionType = 'PAYIN' | 'PAYOUT';
 
 /** The authenticated account (login principal). merchantId is null for admins. */
@@ -12,6 +13,7 @@ export interface AuthUser {
 }
 export type TransactionStatus =
   | 'PENDING'
+  | 'AUTHORIZED'
   | 'COMPLETED'
   | 'FAILED'
   | 'REFUNDED'
@@ -19,15 +21,6 @@ export type TransactionStatus =
   | 'CHARGEBACK';
 
 export type SettleStatus = 'PENDING_RELEASE' | 'RELEASED';
-
-export type Gateway = 'MOCK_BANCAMIGA' | 'MOCK_BANGENTE' | 'STRIPE' | 'MANUAL';
-
-export const GATEWAYS: readonly Gateway[] = [
-  'MOCK_BANCAMIGA',
-  'MOCK_BANGENTE',
-  'STRIPE',
-  'MANUAL',
-];
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -53,16 +46,46 @@ export interface Transaction {
   usdEquivalent: string | null;
   reference: string;
   customerName: string | null;
+  customerId?: string | null;
+  customer?: Customer | null;
   description: string | null;
   createdAt: string;
   feeAmount?: string | null;
   feeTax?: string | null;
   netAmount?: string | null;
+  refundedAmount?: string | null;
   settleStatus?: SettleStatus | null;
   afterRetentionDate?: string | null;
   expiresAt?: string | null;
   provider?: string | null;
   order?: string | null;
+}
+
+/** A registered payer of the merchant. email + name required; cédula for VES methods. */
+export interface Customer {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  address: string | null;
+  country: string | null;
+  cedula: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  transactions?: Transaction[];
+  _count?: { transactions: number };
+}
+
+/** Editable customer fields (dashboard create/edit). */
+export interface CustomerInput {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  address?: string;
+  country?: string;
+  cedula?: string;
 }
 
 export interface MerchantProfile {
@@ -72,7 +95,6 @@ export interface MerchantProfile {
   environment: Environment;
   webhookUrl: string | null;
   autoSettle: boolean;
-  payoutMode: 'INSTANT' | 'MANUAL';
 }
 
 export interface ApiKeys {
@@ -112,7 +134,7 @@ export interface ExchangeRate {
   createdAt: string;
 }
 
-export type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFER' | 'USDT' | 'CARD';
+export type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFER' | 'USDT' | 'CARD' | 'OTP_DEBIT' | 'C2P' | 'ZELLE';
 export type PaymentLinkStatus = 'ACTIVE' | 'PAID' | 'EXPIRED' | 'CANCELLED';
 
 /** Public payload powering the hosted checkout page at /c/{token}. No secrets. */
@@ -175,14 +197,47 @@ export interface AdminMerchantSummary {
   _count: { users: number; transactions: number };
 }
 
-export interface AdminCommissionConfig {
+/** A gateway (pasarela) as managed by admin — internal, never shown to customers. */
+export interface AdminGateway {
   id: string;
-  type: TransactionType;
-  currency: Currency | null;
+  key: string;
+  displayName: string;
+  providerKey: string;
+  currency: Currency;
+  environment: Environment;
+  payoutMode: PayoutMode;
+  enabled: boolean;
   percentageRate: string;
   fixedFee: string;
   minFee: string;
+  maxFee: string;
   taxRate: string;
+  consiAccountId: string;
+  consiAccount?: { id: string; label: string; currency: Currency };
+  destinationSchema?: DestinationField[] | null;
+  createdAt: string;
+}
+
+/** One field of a gateway's dynamic customer-destination contract. */
+export interface DestinationField {
+  key: string;
+  label?: string;
+  type?: string;
+  required?: boolean;
+}
+
+/** Per-merchant gateway enablement row (with optional commission override). */
+export interface MerchantGatewayLink {
+  id: string;
+  gatewayId: string;
+  enabled: boolean;
+  priority: number;
+  percentageRate: string | null;
+  fixedFee: string | null;
+  minFee: string | null;
+  maxFee: string | null;
+  taxRate: string | null;
+  gateway: AdminGateway;
 }
 
 export interface AdminMerchantUser {
@@ -198,27 +253,60 @@ export interface AdminMerchantDetail {
   email: string;
   environment: Environment;
   retentionDays: number;
-  defaultGateway: string | null;
   createdAt: string;
   wallets: Wallet[];
-  commissionConfigs: AdminCommissionConfig[];
+  merchantGateways: MerchantGatewayLink[];
   users: AdminMerchantUser[];
   transactions: Transaction[];
 }
 
-/** Payload for the admin merchant onboarding wizard. */
+/** Payload for the admin merchant onboarding wizard. Gateways auto-enable on create. */
 export interface OnboardMerchantInput {
   businessName: string;
   email: string;
   environment: Environment;
-  commissionPayinRate: string;
-  commissionTax: string;
-  commissionPayoutRate: string;
-  commissionPayoutMinFee: string;
   retentionDays: number;
-  defaultGateway: string;
   userEmail: string;
   userPassword: string;
+}
+
+// ---- Operations (Consi liquidity accounts) ----
+
+export interface ConsiAccount {
+  id: string;
+  label: string;
+  currency: Currency;
+  environment: Environment;
+  balance: string;
+  minBalance: string;
+  lowBalance: boolean;
+  createdAt: string;
+}
+
+export type MovementType = 'FUNDING' | 'WITHDRAWAL' | 'ADJUSTMENT';
+
+export interface AccountMovement {
+  id: string;
+  accountId: string;
+  type: MovementType;
+  amount: string;
+  balanceAfter: string;
+  transactionId: string | null;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export type OpsNotificationType = 'INSUFFICIENT_BALANCE' | 'LOW_BALANCE';
+
+export interface OpsNotification {
+  id: string;
+  type: OpsNotificationType;
+  accountId: string | null;
+  currency: Currency | null;
+  message: string;
+  resolved: boolean;
+  createdAt: string;
 }
 
 /** A payment link as listed in the merchant dashboard. */
@@ -232,4 +320,16 @@ export interface PaymentLinkSummary {
   status: PaymentLinkStatus;
   selectedMethod: PaymentMethod | null;
   createdAt: string;
+}
+
+export interface Dispute {
+  id: string;
+  transactionId: string;
+  transaction: Transaction;
+  status: 'PENDING_EVIDENCE' | 'UNDER_REVIEW' | 'WON' | 'LOST';
+  amount: string;
+  reason: string;
+  evidenceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

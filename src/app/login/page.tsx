@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,7 @@ export default function LoginPage() {
       const { accessToken, user } = await api.login(email, password);
       setToken(accessToken);
       setStoredUser(user);
-      router.push(user.role === 'ADMIN' ? '/admin' : '/');
+      router.push(user.role === 'ADMIN' ? '/admin' : user.role === 'OPERATIONS' ? '/ops' : '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No pudimos iniciar sesión');
     } finally {
@@ -67,7 +68,15 @@ export default function LoginPage() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="password">Contraseña</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="password">Contraseña</Label>
+              <Link
+                href="/forgot-password"
+                className="text-[length:var(--text-xs)] text-[var(--color-accent)] underline-offset-4 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"

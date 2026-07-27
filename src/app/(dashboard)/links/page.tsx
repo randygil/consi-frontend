@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Copy, ExternalLink, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,14 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api-client';
 import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { DEFAULT_METHODS, METHOD_CATEGORIES } from '@/lib/payment-methods';
 import type { Currency, PaymentLinkSummary, PaymentMethod } from '@/lib/types';
 
-const METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'PAGO_MOVIL', label: 'Pago Móvil' },
-  { value: 'TRANSFER', label: 'Transferencia' },
-  { value: 'USDT', label: 'USDT' },
-  { value: 'CARD', label: 'Tarjeta' },
-];
 const CURRENCIES: Currency[] = ['USD', 'VES'];
 
 const LINK_STATUS_LABEL: Record<string, string> = {
@@ -45,7 +41,7 @@ export default function LinksPage() {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD');
   const [description, setDescription] = useState('');
-  const [methods, setMethods] = useState<PaymentMethod[]>(['PAGO_MOVIL', 'TRANSFER', 'USDT', 'CARD']);
+  const [methods, setMethods] = useState<PaymentMethod[]>(DEFAULT_METHODS);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -136,25 +132,74 @@ export default function LinksPage() {
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label>Métodos de pago</Label>
-              <div className="flex flex-wrap gap-2">
-                {METHODS.map((m) => {
-                  const on = methods.includes(m.value);
-                  return (
-                    <button
-                      key={m.value}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => toggleMethod(m.value)}
-                      className={chip(on)}
-                    >
-                      {on ? <Check size={13} /> : null}
-                      {m.label}
-                    </button>
-                  );
-                })}
+            <div className="flex flex-col gap-[var(--space-xs)]">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>Métodos de pago</Label>
+                <Link
+                  href="/methods"
+                  className="text-[length:var(--text-xs)] text-[var(--color-accent)] underline-offset-4 hover:underline"
+                >
+                  ¿Qué significa cada uno?
+                </Link>
               </div>
+
+              {METHOD_CATEGORIES.map(({ category, methods: catMethods }) => (
+                <div key={category} className="flex flex-col gap-1.5">
+                  <p className="label">{category}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {catMethods.map((m) => {
+                      const on = methods.includes(m.key);
+                      const Icon = m.icon;
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => toggleMethod(m.key)}
+                          className={cn(
+                            'flex items-start gap-2.5 rounded-[var(--radius-sm)] border p-2.5 text-left',
+                            'transition-colors duration-[var(--dur-fast)]',
+                            on
+                              ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
+                              : 'border-[var(--color-rule)] hover:border-[var(--color-rule-2)]',
+                          )}
+                        >
+                          <Icon
+                            size={16}
+                            className={cn(
+                              'mt-0.5 shrink-0',
+                              on ? 'text-[var(--color-accent)]' : 'text-[var(--color-ink-4)]',
+                            )}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  'text-[length:var(--text-sm)] font-medium',
+                                  on ? 'text-[var(--color-accent)]' : 'text-[var(--color-ink)]',
+                                )}
+                              >
+                                {m.label}
+                              </span>
+                              {m.badge ? (
+                                <span className="rounded-[var(--radius-xs)] bg-[var(--color-ok-soft)] px-1.5 py-px font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-ok)]">
+                                  {m.badge}
+                                </span>
+                              ) : null}
+                              {on ? (
+                                <Check size={13} className="ml-auto shrink-0 text-[var(--color-accent)]" />
+                              ) : null}
+                            </span>
+                            <span className="mt-0.5 block text-[length:var(--text-xs)] leading-snug text-[var(--color-ink-3)]">
+                              {m.tagline}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {error ? <Notice kind="err">{error}</Notice> : null}

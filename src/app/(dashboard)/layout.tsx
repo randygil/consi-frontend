@@ -11,9 +11,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { loading, user, merchant } = useAuth();
 
   useEffect(() => {
-    // Admins belong in the admin dashboard, not the merchant one.
+    // Admins and operations users belong in their own panels, not the merchant one.
     if (!loading && user?.role === 'ADMIN') {
       router.replace('/admin');
+    } else if (!loading && user?.role === 'OPERATIONS') {
+      router.replace('/ops');
     }
   }, [loading, user, router]);
 
@@ -25,6 +27,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     );
   }
   if (!merchant) return null; // AuthProvider redirects to /login (or admin redirect above)
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -46,3 +49,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </AuthProvider>
   );
 }
+

@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Notice, PageHead } from '@/components/ui/page-head';
-import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -18,7 +16,6 @@ export default function SettlementsPage() {
   const [result, setResult] = useState<{ released: number; evaluated: number } | null>(null);
 
   const [autoSettle, setAutoSettle] = useState(false);
-  const [payoutMode, setPayoutMode] = useState<'INSTANT' | 'MANUAL'>('INSTANT');
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(
     null,
@@ -36,7 +33,6 @@ export default function SettlementsPage() {
       .getProfile()
       .then((p) => {
         setAutoSettle(p.autoSettle);
-        setPayoutMode(p.payoutMode);
       })
       .catch((e) => console.error('Failed to load merchant settings', e));
   }, []);
@@ -65,7 +61,7 @@ export default function SettlementsPage() {
     setSettingsSaving(true);
     setSettingsMessage(null);
     try {
-      await api.updateSettings({ autoSettle, payoutMode });
+      await api.updateSettings({ autoSettle });
       setSettingsMessage({ kind: 'ok', text: 'Configuración guardada.' });
       setTimeout(() => setSettingsMessage(null), 3000);
     } catch (err) {
@@ -173,22 +169,6 @@ export default function SettlementsPage() {
                   </span>
                 </span>
               </label>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="payoutMode">Modo de retiro por defecto</Label>
-                <Select
-                  id="payoutMode"
-                  value={payoutMode}
-                  onChange={(e) => setPayoutMode(e.target.value as 'INSTANT' | 'MANUAL')}
-                >
-                  <option value="INSTANT">Instantáneo</option>
-                  <option value="MANUAL">Manual — requiere aprobación</option>
-                </Select>
-                <p className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
-                  Define si los retiros se envían al banco de inmediato o quedan en cola de
-                  aprobación.
-                </p>
-              </div>
 
               {settingsMessage ? (
                 <Notice kind={settingsMessage.kind}>{settingsMessage.text}</Notice>

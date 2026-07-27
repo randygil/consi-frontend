@@ -6,27 +6,65 @@ import {
   Coins,
   Copy,
   CreditCard,
+  DollarSign,
   Loader2,
   Lock,
   Smartphone,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { CardDropIn } from '@/components/CardDropIn';
 import { checkoutApi } from '@/lib/checkout-client';
 import { formatMoney } from '@/lib/format';
-import type { CheckoutData, PaymentInstructions, PaymentMethod } from '@/lib/types';
+import type {
+  CheckoutData,
+  Currency,
+  CustomerInput,
+  PaymentInstructions,
+  PaymentMethod,
+} from '@/lib/types';
+
+type CustomerForm = { firstName: string; lastName: string; email: string; cedula: string };
+
+/**
+ * Validate the payer details and build the customer payload. Cédula + full data are
+ * required for VES (Venezuelan) methods; for USD they're optional. Returns an error
+ * message or the (possibly undefined) customer to send.
+ */
+function resolveCustomer(
+  c: CustomerForm,
+  currency?: Currency,
+): { error: string } | { customer?: CustomerInput } {
+  if (currency === 'VES') {
+    if (!c.firstName.trim() || !c.lastName.trim() || !c.email.trim())
+      return { error: 'Ingresa tu nombre, apellido y correo' };
+    if (!c.cedula.trim())
+      return { error: 'La cédula es obligatoria para pagos en bolívares' };
+  }
+  const has = c.firstName || c.lastName || c.email || c.cedula;
+  return {
+    customer: has
+      ? {
+          firstName: c.firstName.trim(),
+          lastName: c.lastName.trim(),
+          email: c.email.trim(),
+          cedula: c.cedula.trim() || undefined,
+        }
+      : undefined,
+  };
+}
 
 const METHOD_ICON: Record<PaymentMethod, React.ReactNode> = {
-  PAGO_MOVIL: <Smartphone size={17} />,
-  TRANSFER: <Building2 size={17} />,
-  USDT: <Coins size={17} />,
-  CARD: <CreditCard size={17} />,
+  PAGO_MOVIL: <Smartphone size={20} />,
+  TRANSFER: <Building2 size={20} />,
+  USDT: <Coins size={20} />,
+  CARD: <CreditCard size={20} />,
+  OTP_DEBIT: <Lock size={20} />,
+  C2P: <Lock size={20} />,
+  ZELLE: <DollarSign size={20} />,
 };
 
 type Step = 'method' | 'instructions' | 'done';
-
-const inputCls =
-  'w-full rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-surface)] px-2.5 py-2 font-[family-name:var(--font-mono)] text-[length:var(--text-base)] text-[var(--color-ink)] outline-none transition-colors duration-[var(--dur-fast)] placeholder:text-[var(--color-ink-4)] focus-visible:border-[var(--color-accent)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-focus)]';
 
 export default function CheckoutPage() {
   const token = String(useParams().token);
@@ -35,7 +73,17 @@ export default function CheckoutPage() {
   const [step, setStep] = useState<Step>('method');
   const [instructions, setInstructions] = useState<PaymentInstructions | null>(null);
   const [reference, setReference] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
+  const [show3ds, setShow3ds] = useState(false);
+  const [loading3ds, setLoading3ds] = useState(false);
+  const [customer, setCustomer] = useState<CustomerForm>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    cedula: '',
+  });
 
   useEffect(() => {
     // Always start at method selection. Links are reusable, so a previously-paid
@@ -50,26 +98,41 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (step !== 'instructions') return;
     const id = setInterval(() => {
-      checkoutApi
-        .status(token)
-        .then((s) => {
-          if (s.status === 'PAID') {
-            setStep('done');
-            clearInterval(id);
-          }
-        })
-        // A blip mid-poll is not worth alarming the payer — the next tick retries.
-        .catch(() => {});
+      checkoutApi.status(token).then((s) => {
+        if (s.status === 'PAID') {
+          setStep('done');
+          clearInterval(id);
+        }
+      });
     }, 3000);
     return () => clearInterval(id);
   }, [step, token]);
 
   const choose = useCallback(
     async (m: PaymentMethod) => {
+      const resolved = resolveCustomer(customer, data?.currency);
+      if ('error' in resolved) {
+        setError(resolved.error);
+        return;
+      }
+      if (m === 'CARD') {
+        // Skip direct payment creation for card method: we transition directly to instructions (interactive form)
+        // and only create/tokenize when they click pay. The payer data captured above
+        // persists in state and is sent at tokenize time.
+        setInstructions({
+          method: 'CARD',
+          label: 'Tarjeta de Crédito',
+          note: 'Ingresa los datos de tu tarjeta para completar el pago de forma segura.',
+          fields: [],
+          interactive: true,
+        });
+        setStep('instructions');
+        return;
+      }
       setBusy(true);
       setError(null);
       try {
-        const res = await checkoutApi.pay(token, m);
+        const res = await checkoutApi.pay(token, m, undefined, resolved.customer);
         setInstructions(res.instructions);
         setStep('instructions');
       } catch (e) {
@@ -78,8 +141,30 @@ export default function CheckoutPage() {
         setBusy(false);
       }
     },
-    [token],
+    [token, customer, data],
   );
+
+  const onTokenizeSuccess = useCallback(async (cardToken: string) => {
+    const resolved = resolveCustomer(customer, data?.currency);
+    if ('error' in resolved) {
+      setError(resolved.error);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.pay(token, 'CARD', cardToken, resolved.customer);
+      if (res.status === 'AUTHORIZED') {
+        setShow3ds(true);
+      } else {
+        setStep('done');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al procesar el pago');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, customer, data]);
 
   const confirm = useCallback(async () => {
     setBusy(true);
@@ -98,20 +183,55 @@ export default function CheckoutPage() {
     }
   }, [token, reference]);
 
+  // Pago Móvil: confirm by the sender's phone number — we reconcile it automatically
+  // against the bank's inbound report, no reference to copy.
+  const confirmByPhone = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.confirmAuto(token, phone.trim());
+      if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+        setStep('done');
+      } else {
+        setError('No pudimos confirmar el pago todavía. Intenta de nuevo en unos segundos.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, phone]);
+
+  // Zelle: confirm by the sender's email — reconciled against the incoming Zelle feed.
+  const confirmByEmail = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.confirmZelle(token, email.trim());
+      if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+        setStep('done');
+      } else {
+        setError('No pudimos confirmar el pago todavía. Intenta de nuevo en unos segundos.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, email]);
+
   if (error && !data) {
     return (
       <Shell>
-        <p role="alert" className="py-[var(--space-lg)] text-center text-[length:var(--text-sm)] text-[var(--color-bad)]">
-          {error}
-        </p>
+        <p className="text-center text-sm text-[var(--danger-600)]">{error}</p>
       </Shell>
     );
   }
   if (!data) {
     return (
       <Shell>
-        <div className="flex justify-center py-[var(--space-xl)]">
-          <Loader2 className="animate-spin text-[var(--color-ink-4)]" size={20} />
+        <div className="flex justify-center py-10">
+          <Loader2 className="animate-spin text-[var(--text-subtle)]" />
         </div>
       </Shell>
     );
@@ -122,23 +242,55 @@ export default function CheckoutPage() {
       <AmountBlock data={data} />
 
       {step === 'method' && (
-        <div className="flex flex-col gap-2">
-          <p className="label">Elige cómo pagar</p>
+        <div className="space-y-2.5">
+          <p className="text-[13px] font-semibold text-[var(--text-muted)]">
+            Tus datos{data.currency === 'VES' ? '' : ' (opcional)'}
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <input
+              value={customer.firstName}
+              onChange={(e) => setCustomer({ ...customer, firstName: e.target.value })}
+              placeholder="Nombre"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+            />
+            <input
+              value={customer.lastName}
+              onChange={(e) => setCustomer({ ...customer, lastName: e.target.value })}
+              placeholder="Apellido"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+            />
+          </div>
+          <input
+            type="email"
+            value={customer.email}
+            onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+            placeholder="Correo electrónico"
+            className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+          />
+          {data.currency === 'VES' && (
+            <input
+              value={customer.cedula}
+              onChange={(e) => setCustomer({ ...customer, cedula: e.target.value })}
+              placeholder="Cédula / RIF (ej. V-12345678)"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+            />
+          )}
+          <p className="pt-1 text-[13px] font-semibold text-[var(--text-muted)]">
+            Elige cómo pagar
+          </p>
           {data.methods.map((m) => (
             <button
               key={m.method}
               type="button"
               disabled={busy}
               onClick={() => choose(m.method)}
-              className="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-surface)] px-3 py-3 text-left transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-accent)] disabled:opacity-50"
+              className="flex w-full items-center gap-3 rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-4 py-3.5 text-left transition-all hover:border-[var(--blue-400)] hover:shadow-[var(--shadow-sm)] disabled:opacity-50"
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--color-rule)] text-[var(--color-ink-3)]">
+              <span className="flex size-9 items-center justify-center rounded-[10px] bg-[var(--blue-100)] text-[var(--blue-700)]">
                 {METHOD_ICON[m.method]}
               </span>
-              <span className="flex-1 text-[length:var(--text-base)] font-medium text-[var(--color-ink)]">
-                {m.label}
-              </span>
-              {busy ? <Loader2 size={15} className="animate-spin text-[var(--color-ink-4)]" /> : null}
+              <span className="flex-1 font-semibold text-[var(--text-strong)]">{m.label}</span>
+              {busy ? <Loader2 size={16} className="animate-spin text-[var(--text-subtle)]" /> : null}
             </button>
           ))}
         </div>
@@ -146,150 +298,422 @@ export default function CheckoutPage() {
 
       {step === 'instructions' && instructions && (
         <InstructionsView
+          token={token}
           instructions={instructions}
           busy={busy}
           reference={reference}
           onReferenceChange={setReference}
+          phone={phone}
+          onPhoneChange={setPhone}
+          email={email}
+          onEmailChange={setEmail}
           onConfirm={confirm}
+          onConfirmByPhone={confirmByPhone}
+          onConfirmByEmail={confirmByEmail}
+          onPaid={() => setStep('done')}
           onBack={() => {
             setReference('');
+            setPhone('');
+            setEmail('');
             setError(null);
             setStep('method');
           }}
+          onTokenizeSuccess={onTokenizeSuccess}
+          setError={setError}
         />
       )}
 
       {step === 'done' && <DoneView successUrl={data.successUrl} />}
 
       {error && data ? (
-        <p role="alert" className="text-center text-[length:var(--text-xs)] text-[var(--color-bad)]">
-          {error}
-        </p>
+        <p className="text-center text-xs text-[var(--danger-600)]">{error}</p>
       ) : null}
+
+      {/* Simulated 3D Secure 2.0 Challenge Modal */}
+      {show3ds && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-sm rounded-[var(--radius-lg)] bg-white p-6 shadow-2xl border border-[var(--ink-100)] text-center space-y-4">
+            <span className="flex size-14 items-center justify-center rounded-full bg-[var(--blue-50)] text-[var(--blue-700)] mx-auto">
+              <Smartphone size={28} className="animate-bounce" />
+            </span>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-[var(--text-strong)]">Autenticación 3D Secure 2.0</h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Para tu seguridad, autoriza esta transacción presionando el botón de abajo (simulación de biometría/app del banco).
+              </p>
+            </div>
+            
+            <div className="border border-[var(--ink-100)] rounded-[var(--radius-md)] p-3 bg-[var(--ink-50)] text-xs font-semibold text-[var(--text-body)] font-mono">
+              Comercio: {data.businessName} <br />
+              Monto: {formatMoney(data.amount, data.currency)}
+            </div>
+
+            <button
+              type="button"
+              disabled={loading3ds}
+              onClick={async () => {
+                setLoading3ds(true);
+                try {
+                  const res = await checkoutApi.confirm3ds(token);
+                  if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+                    setShow3ds(false);
+                    setStep('done');
+                  } else {
+                    setError('Autenticación 3DS fallida. Intenta nuevamente.');
+                  }
+                } catch (e: any) {
+                  setError(e.message || 'Error en autenticación 3DS');
+                } finally {
+                  setLoading3ds(false);
+                }
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+              style={{ background: 'var(--gradient-brand)' }}
+            >
+              {loading3ds ? <Loader2 size={16} className="animate-spin" /> : null}
+              Confirmar Autenticación
+            </button>
+            <button
+              type="button"
+              onClick={() => setShow3ds(false)}
+              className="w-full text-center text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }
 
 function Shell({ children, businessName }: { children: React.ReactNode; businessName?: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center p-[var(--space-sm)]">
-      <div className="w-full max-w-[400px]">
-        <div className="rounded-[var(--radius-lg)] border border-[var(--color-rule)] bg-[var(--color-surface)] p-[var(--space-md)]">
-          <div className="mb-[var(--space-md)] flex items-center justify-between gap-2 border-b border-[var(--color-rule)] pb-[var(--space-xs)]">
-            <span className="min-w-0 truncate font-[family-name:var(--font-display)] text-[length:var(--text-base)] font-semibold tracking-[var(--tracking-display)] text-[var(--color-ink)]">
-              {businessName ?? 'Consi'}
-            </span>
-            <span className="label flex shrink-0 items-center gap-1">
-              <Lock size={10} /> Pago seguro
-            </span>
-          </div>
-          <div className="flex flex-col gap-[var(--space-md)]">{children}</div>
+    <main
+      className="flex min-h-screen items-center justify-center p-4"
+      style={{ background: 'var(--gradient-mesh)' }}
+    >
+      <div className="w-full max-w-[420px] rounded-[var(--radius-xl)] bg-white p-7 shadow-[var(--shadow-lg)]">
+        <div className="mb-5 flex items-center justify-between">
+          <span className="text-[15px] font-extrabold tracking-tight text-[var(--text-strong)]">
+            {businessName ?? 'Consi'}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--ink-50)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--text-muted)]">
+            <Lock size={11} /> Pago seguro
+          </span>
         </div>
-
-        {/* Ft2 — inline single line */}
-        <p className="mt-[var(--space-sm)] text-center text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-          Procesado por <span className="text-[var(--color-ink-3)]">Consi</span> · Pasarela de pagos
+        <div className="space-y-5">{children}</div>
+        <p className="mt-6 text-center text-[11px] text-[var(--text-subtle)]">
+          Procesado por <span className="font-bold">Consi</span> · Pasarela de pagos
         </p>
       </div>
     </main>
   );
 }
 
-/** Stat-Led: the amount is the hero. Everything below qualifies it. */
 function AmountBlock({ data }: { data: CheckoutData }) {
   return (
-    <div className="min-w-0 text-center">
-      <p className="label">Total a pagar</p>
-      <p className="num mt-2 break-words text-[length:clamp(1.75rem,9vw,2.375rem)] font-medium leading-none text-[var(--color-ink)]">
+    <div className="rounded-[var(--radius-lg)] bg-[var(--ink-50)] p-5 text-center">
+      <div className="font-mono text-[34px] font-bold leading-none text-[var(--text-strong)]">
         {formatMoney(data.amount, data.currency)}
-      </p>
+      </div>
       {data.currency !== 'USD' ? (
-        <p className="num mt-2 text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+        <div className="mt-1.5 text-[13px] text-[var(--text-muted)]">
           ≈ {formatMoney(data.usdEquivalent, 'USD')}
-        </p>
+        </div>
       ) : null}
       {data.description ? (
-        <p className="mt-2 text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
-          {data.description}
-        </p>
+        <div className="mt-2 text-[13px] font-medium text-[var(--text-body)]">{data.description}</div>
       ) : null}
     </div>
   );
 }
 
 function InstructionsView({
+  token,
   instructions,
   busy,
   reference,
   onReferenceChange,
+  phone,
+  onPhoneChange,
+  email,
+  onEmailChange,
   onConfirm,
+  onConfirmByPhone,
+  onConfirmByEmail,
+  onPaid,
   onBack,
+  onTokenizeSuccess,
+  setError,
 }: {
+  token: string;
   instructions: PaymentInstructions;
   busy: boolean;
   reference: string;
   onReferenceChange: (value: string) => void;
+  phone: string;
+  onPhoneChange: (value: string) => void;
+  email: string;
+  onEmailChange: (value: string) => void;
   onConfirm: () => void;
+  onConfirmByPhone: () => void;
+  onConfirmByEmail: () => void;
+  onPaid: () => void;
   onBack: () => void;
+  onTokenizeSuccess: (token: string) => void;
+  setError: (err: string | null) => void;
 }) {
+  // Pago Móvil confirms by the sender's phone (auto-reconciled); Zelle by the sender's
+  // email; C2P/OTP-debit is an interactive OTP flow; other rails confirm by bank reference.
+  const isPagoMovil = instructions.method === 'PAGO_MOVIL';
+  const isC2P = instructions.method === 'C2P' || instructions.method === 'OTP_DEBIT';
+  const isZelle = instructions.method === 'ZELLE';
+  const [useReference, setUseReference] = useState(false);
+  const phoneMode = isPagoMovil && !useReference;
+
   return (
-    <div className="flex flex-col gap-[var(--space-sm)]">
+    <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--color-rule)] text-[var(--color-ink-3)]">
+        <span className="flex size-8 items-center justify-center rounded-[9px] bg-[var(--blue-100)] text-[var(--blue-700)]">
           {METHOD_ICON[instructions.method]}
         </span>
-        <span className="text-[length:var(--text-base)] font-medium text-[var(--color-ink)]">
-          {instructions.label}
-        </span>
+        <span className="font-bold text-[var(--text-strong)]">{instructions.label}</span>
       </div>
-      <p className="text-[length:var(--text-sm)] leading-relaxed text-[var(--color-ink-2)]">
-        {instructions.note}
-      </p>
+      <p className="text-[13px] leading-relaxed text-[var(--text-body)]">{instructions.note}</p>
 
-      {instructions.interactive ? (
-        <CardForm />
+      {instructions.interactive && isC2P ? (
+        <OtpForm token={token} onDone={onPaid} setError={setError} />
+      ) : instructions.interactive ? (
+        <CardDropIn onSuccess={onTokenizeSuccess} onError={setError} />
       ) : (
         <>
           {instructions.qr ? <QrBox value={instructions.qr} /> : null}
-          <div className="divide-y divide-[var(--color-rule)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-rule)]">
+          <div className="divide-y divide-[var(--ink-100)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--ink-150)]">
             {instructions.fields.map((f) => (
               <Field key={f.label} label={f.label} value={f.value} copyable={f.copyable !== false} />
             ))}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="ref" className="label">
-              Número de referencia
+
+          {phoneMode ? (
+            <label className="block space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+                Teléfono desde el que pagaste
+              </span>
+              <input
+                value={phone}
+                onChange={(e) => onPhoneChange(e.target.value)}
+                placeholder="Ej. 0412-1234567"
+                inputMode="tel"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
+              />
+              <span className="text-[11px] text-[var(--text-subtle)]">
+                Verificamos tu pago automáticamente con tu número. No necesitas la referencia.
+              </span>
+              <button
+                type="button"
+                onClick={() => onPhoneChange('0412-000-0000')}
+                className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
+              >
+                🧪 Usar teléfono de prueba
+              </button>
             </label>
-            <input
-              id="ref"
-              value={reference}
-              onChange={(e) => onReferenceChange(e.target.value)}
-              placeholder="0123456789"
-              inputMode="numeric"
-              className={inputCls}
-            />
-            <span className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-              La referencia que te dio tu banco al hacer el pago.
-            </span>
-          </div>
+          ) : isZelle ? (
+            <label className="block space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+                Correo desde el que enviaste el Zelle
+              </span>
+              <input
+                value={email}
+                onChange={(e) => onEmailChange(e.target.value)}
+                placeholder="tucorreo@ejemplo.com"
+                inputMode="email"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
+              />
+              <span className="text-[11px] text-[var(--text-subtle)]">
+                Verificamos tu pago automáticamente con el correo del remitente.
+              </span>
+              <button
+                type="button"
+                onClick={() => onEmailChange('pagador@test.com')}
+                className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
+              >
+                🧪 Usar correo de prueba
+              </button>
+            </label>
+          ) : (
+            <label className="block space-y-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+                Número de referencia del pago
+              </span>
+              <input
+                value={reference}
+                onChange={(e) => onReferenceChange(e.target.value)}
+                placeholder="Ej. 0123456789"
+                inputMode="numeric"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
+              />
+              <span className="text-[11px] text-[var(--text-subtle)]">
+                Ingresa la referencia que te dio tu banco para confirmar el pago.
+              </span>
+            </label>
+          )}
+
+          {isPagoMovil ? (
+            <button
+              type="button"
+              onClick={() => {
+                setUseReference((v) => !v);
+                setError(null);
+              }}
+              className="text-[12px] font-medium text-[var(--blue-700)] hover:underline"
+            >
+              {useReference ? '← Verificar con mi número de teléfono' : '¿Prefieres usar la referencia bancaria?'}
+            </button>
+          ) : null}
         </>
       )}
 
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onConfirm}
-        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-4 py-3 text-[length:var(--text-base)] font-medium text-[var(--color-accent-ink)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--color-accent-hover)] active:translate-y-px disabled:opacity-50"
-      >
-        {busy ? <Loader2 size={15} className="animate-spin" /> : null}
-        {instructions.interactive ? 'Pagar ahora' : 'Ya realicé el pago'}
-      </button>
+      {instructions.interactive && isC2P ? null : (
+        <button
+          type={instructions.interactive ? 'submit' : 'button'}
+          form={instructions.interactive ? 'card-dropin-form' : undefined}
+          disabled={
+            busy ||
+            (phoneMode && phone.trim().length < 7) ||
+            (isZelle && !email.includes('@'))
+          }
+          onClick={
+            instructions.interactive
+              ? undefined
+              : phoneMode
+                ? onConfirmByPhone
+                : isZelle
+                  ? onConfirmByEmail
+                  : onConfirm
+          }
+          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+          style={{ background: 'var(--gradient-brand)' }}
+        >
+          {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+          {instructions.interactive
+            ? 'Pagar ahora'
+            : phoneMode || isZelle
+              ? 'Verificar mi pago'
+              : 'Ya realicé el pago'}
+        </button>
+      )}
       <button
         type="button"
         onClick={onBack}
-        className="w-full text-center text-[length:var(--text-sm)] text-[var(--color-ink-3)] underline-offset-4 transition-colors duration-[var(--dur-fast)] hover:text-[var(--color-ink)] hover:underline"
+        className="w-full text-center text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
       >
-        Cambiar método de pago
+        ← Cambiar método de pago
+      </button>
+    </div>
+  );
+}
+
+/**
+ * C2P / OTP-debit interactive flow: collect the payer's cédula/teléfono/banco, request
+ * the bank OTP, then submit the code to authorize the debit in real time. Self-contained —
+ * it drives the request-otp / confirm-otp endpoints and signals `onDone` once settled.
+ */
+function OtpForm({
+  token,
+  onDone,
+  setError,
+}: {
+  token: string;
+  onDone: () => void;
+  setError: (err: string | null) => void;
+}) {
+  const [cedula, setCedula] = useState('');
+  const [phone, setPhone] = useState('');
+  const [bank, setBank] = useState('');
+  const [otp, setOtp] = useState('');
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const request = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await checkoutApi.requestOtp(token, { cedula, phone, bank });
+      setSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, cedula, phone, bank, setError]);
+
+  const confirm = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await checkoutApi.confirmOtp(token, otp.trim());
+      if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+        onDone();
+      } else {
+        setError('La clave OTP no es válida. Verifícala e intenta de nuevo.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  }, [token, otp, onDone, setError]);
+
+  const inputClass =
+    'w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]';
+
+  if (!sent) {
+    return (
+      <div className="space-y-3">
+        <input value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="Cédula (ej. V-12345678)" className={inputClass} />
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono (ej. 0412-1234567)" inputMode="tel" className={inputClass} />
+        <input value={bank} onChange={(e) => setBank(e.target.value)} placeholder="Banco (ej. 0172)" className={inputClass} />
+        <button
+          type="button"
+          disabled={busy || cedula.trim().length < 5 || phone.trim().length < 7}
+          onClick={request}
+          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+          style={{ background: 'var(--gradient-brand)' }}
+        >
+          {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+          Solicitar clave OTP
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="block space-y-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+          Clave OTP
+        </span>
+        <input
+          value={otp}
+          onChange={(e) => setOtp(e.target.value)}
+          placeholder="Ej. 123456"
+          inputMode="numeric"
+          className={inputClass}
+        />
+        <span className="text-[11px] text-[var(--text-subtle)]">
+          Ingresa la clave que tu banco te envió para autorizar el débito.
+        </span>
+      </label>
+      <button
+        type="button"
+        disabled={busy || otp.trim().length < 4}
+        onClick={confirm}
+        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
+        style={{ background: 'var(--gradient-brand)' }}
+      >
+        {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+        Autorizar pago
       </button>
     </div>
   );
@@ -298,10 +722,12 @@ function InstructionsView({
 function Field({ label, value, copyable }: { label: string; value: string; copyable: boolean }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex items-center justify-between gap-2 bg-[var(--color-surface)] px-3 py-2">
+    <div className="flex items-center justify-between gap-3 bg-white px-3.5 py-2.5">
       <div className="min-w-0">
-        <div className="label">{label}</div>
-        <div className="num mt-0.5 truncate text-[length:var(--text-sm)] text-[var(--color-ink)]">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
+          {label}
+        </div>
+        <div className="truncate font-mono text-[13px] font-semibold text-[var(--text-strong)]">
           {value}
         </div>
       </div>
@@ -314,13 +740,9 @@ function Field({ label, value, copyable }: { label: string; value: string; copya
             setCopied(true);
             setTimeout(() => setCopied(false), 1200);
           }}
-          className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-xs)] text-[var(--color-ink-4)] transition-colors duration-[var(--dur-fast)] hover:bg-[var(--color-paper-3)] hover:text-[var(--color-accent)]"
+          className="flex size-8 flex-none items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--blue-700)]"
         >
-          {copied ? (
-            <CheckCircle2 size={14} className="text-[var(--color-ok)]" />
-          ) : (
-            <Copy size={14} />
-          )}
+          {copied ? <CheckCircle2 size={15} className="text-[var(--success-600)]" /> : <Copy size={15} />}
         </button>
       ) : null}
     </div>
@@ -329,32 +751,13 @@ function Field({ label, value, copyable }: { label: string; value: string; copya
 
 function QrBox({ value }: { value: string }) {
   // Rendered via a public QR image service for the MVP; swap for a bundled encoder
-  // in production. The raw value is always available to copy in the fields below.
+  // in production. The raw value below is always available as a fallback to copy.
   const src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=${encodeURIComponent(value)}`;
   return (
-    <figure className="flex flex-col items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-surface)] p-[var(--space-sm)]">
+    <div className="flex flex-col items-center gap-2 rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white p-4">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt="Código QR de pago"
-        width={150}
-        height={150}
-        className="rounded-[var(--radius-xs)] bg-white"
-      />
-      <figcaption className="label">Escanea para pagar</figcaption>
-    </figure>
-  );
-}
-
-function CardForm() {
-  return (
-    <div className="flex flex-col gap-2">
-      <input placeholder="Número de tarjeta" inputMode="numeric" className={inputCls} autoComplete="cc-number" />
-      <div className="flex gap-2">
-        <input placeholder="MM/AA" className={inputCls} autoComplete="cc-exp" />
-        <input placeholder="CVC" inputMode="numeric" className={inputCls} autoComplete="cc-csc" />
-      </div>
-      <input placeholder="Nombre en la tarjeta" className={inputCls} autoComplete="cc-name" />
+      <img src={src} alt="Código QR de pago" width={150} height={150} className="rounded-[8px]" />
+      <span className="text-[11px] text-[var(--text-subtle)]">Escanea para pagar</span>
     </div>
   );
 }
@@ -377,19 +780,14 @@ function DoneView({ successUrl }: { successUrl: string | null }) {
   }, [successUrl]);
 
   return (
-    <div
-      role="status"
-      className="flex flex-col items-center gap-3 py-[var(--space-lg)] text-center"
-    >
-      <span className="flex size-11 items-center justify-center rounded-full bg-[var(--color-ok-soft)]">
-        <CheckCircle2 size={24} className="text-[var(--color-ok)]" />
+    <div className="flex flex-col items-center gap-3 py-6 text-center">
+      <span className="flex size-16 items-center justify-center rounded-full bg-[var(--success-100)]">
+        <CheckCircle2 size={36} className="text-[var(--success-600)]" />
       </span>
-      <p className="text-[length:var(--text-lg)] font-semibold text-[var(--color-ink)]">
-        Pago confirmado
-      </p>
-      <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
-        Recibimos tu pago correctamente.
-        {successUrl ? ' Te estamos redirigiendo…' : ''}
+      <div className="text-lg font-extrabold text-[var(--text-strong)]">¡Pago confirmado!</div>
+      <p className="text-[13px] text-[var(--text-muted)]">
+        Tu pago fue recibido correctamente.
+        {successUrl ? ' Redirigiendo…' : ''}
       </p>
     </div>
   );

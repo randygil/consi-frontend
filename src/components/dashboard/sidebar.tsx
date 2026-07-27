@@ -2,7 +2,18 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeftRight, Banknote, Code2, LayoutDashboard, Link2, Wallet } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Banknote,
+  BookOpen,
+  Code2,
+  CreditCard,
+  LayoutDashboard,
+  Link2,
+  ShieldAlert,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api-client';
 import { formatRate } from '@/lib/format';
@@ -11,10 +22,14 @@ import { cn } from '@/lib/utils';
 export const MERCHANT_NAV = [
   { href: '/', label: 'Panel', icon: LayoutDashboard, keywords: 'resumen dashboard inicio' },
   { href: '/links', label: 'Links de pago', icon: Link2, keywords: 'cobrar checkout payment links' },
-  { href: '/transactions', label: 'Transacciones', icon: ArrowLeftRight, keywords: 'pagos movimientos' },
+  { href: '/methods', label: 'Métodos de pago', icon: CreditCard, keywords: 'pago movil zelle usdt tarjeta' },
+  { href: '/transactions', label: 'Cobros', icon: ArrowLeftRight, keywords: 'pagos movimientos transacciones' },
+  { href: '/customers', label: 'Clientes', icon: Users, keywords: 'customers pagadores cedula' },
   { href: '/payouts', label: 'Retiros', icon: Banknote, keywords: 'payout banco cuenta' },
   { href: '/settlements', label: 'Liquidaciones', icon: Wallet, keywords: 'settlement dispersion' },
-  { href: '/developers', label: 'Desarrolladores', icon: Code2, keywords: 'api keys webhooks docs' },
+  { href: '/disputes', label: 'Disputas', icon: ShieldAlert, keywords: 'contracargo chargeback reclamo' },
+  { href: '/developers', label: 'Desarrolladores', icon: Code2, keywords: 'api keys webhooks' },
+  { href: '/docs', label: 'Documentación', icon: BookOpen, keywords: 'docs guia integracion' },
 ];
 
 /** Wordmark: a filled accent square, not a gradient dot. One mark, one colour. */

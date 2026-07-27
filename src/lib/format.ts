@@ -3,6 +3,7 @@ import type { Currency, TransactionStatus, TransactionType } from './types';
 const STATUS_LABELS: Record<TransactionStatus, string> = {
   COMPLETED: 'Completado',
   PENDING: 'Pendiente',
+  AUTHORIZED: 'Autorizado',
   FAILED: 'Fallido',
   REFUNDED: 'Reembolsado',
   EXPIRED: 'Expirado',

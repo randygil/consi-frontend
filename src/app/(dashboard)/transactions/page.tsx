@@ -1,49 +1,87 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { FileSpreadsheet, FileText } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Notice, PageHead } from '@/components/ui/page-head';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
-import { formatDate, formatMoney, typeLabel } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
+import { exportTransactionsToExcel, exportTransactionsToPdf } from '@/lib/export';
 import type { Transaction } from '@/lib/types';
-
-const EMPTY = { status: '', currency: '', type: '', from: '', to: '' };
 
 export default function TransactionsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState(EMPTY);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [filters, setFilters] = useState({ status: '', currency: '', from: '', to: '' });
+
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    setError(null);
+    try {
+      const params: Record<string, string> = { type: 'PAYIN', take: '5000' };
+      if (filters.status) params.status = filters.status;
+      if (filters.currency) params.currency = filters.currency;
+      if (filters.from) params.from = new Date(filters.from).toISOString();
+      if (filters.to) params.to = new Date(filters.to).toISOString();
+      const data = await api.getTransactions(params);
+      exportTransactionsToExcel(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al exportar a Excel');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    setError(null);
+    try {
+      const params: Record<string, string> = { type: 'PAYIN', take: '5000' };
+      if (filters.status) params.status = filters.status;
+      if (filters.currency) params.currency = filters.currency;
+      if (filters.from) params.from = new Date(filters.from).toISOString();
+      if (filters.to) params.to = new Date(filters.to).toISOString();
+      const data = await api.getTransactions(params);
+      exportTransactionsToPdf(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al exportar a PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const [refundingTx, setRefundingTx] = useState<Transaction | null>(null);
+  const [customRefundAmount, setCustomRefundAmount] = useState<string>('');
+  const [isPartial, setIsPartial] = useState<boolean>(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
+  const [refundSubmitting, setRefundSubmitting] = useState<boolean>(false);
 
   const load = useCallback(() => {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { type: 'PAYIN' };
     if (filters.status) params.status = filters.status;
     if (filters.currency) params.currency = filters.currency;
-    if (filters.type) params.type = filters.type;
     if (filters.from) params.from = new Date(filters.from).toISOString();
     if (filters.to) params.to = new Date(filters.to).toISOString();
-    api
-      .getTransactions(params)
-      .then(setRows)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Error'));
+    api.getTransactions(params).then(setRows).catch((e) =>
+      setError(e instanceof Error ? e.message : 'Error'),
+    );
   }, [filters]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  const set =
-    (k: keyof typeof filters) =>
-    (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) =>
-      setFilters((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k: keyof typeof filters) => (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) =>
+    setFilters((f) => ({ ...f, [k]: e.target.value }));
 
-  const active = Object.values(filters).some(Boolean);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const runAction = useCallback(
     async (id: string, action: (id: string) => Promise<Transaction>, confirmMsg?: string) => {
@@ -63,137 +101,141 @@ export default function TransactionsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-[var(--space-md)]">
-      <PageHead
-        title="Transacciones"
-        lede="Todos los movimientos del comercio, entrantes y salientes."
-        action={
-          <span className="label">
-            {rows.length} {rows.length === 1 ? 'resultado' : 'resultados'}
-          </span>
-        }
-      />
-
-      {/* Filters read as an instrument row, not a titled card. */}
-      <Card className="p-[var(--space-sm)]">
-        <div className="grid gap-[var(--space-xs)] sm:grid-cols-2 lg:grid-cols-5">
-          <Field label="Estado">
-            <Select value={filters.status} onChange={set('status')}>
-              <option value="">Todos</option>
-              <option value="PENDING">Pendiente</option>
-              <option value="COMPLETED">Completado</option>
-              <option value="FAILED">Fallido</option>
-              <option value="REFUNDED">Reembolsado</option>
-            </Select>
-          </Field>
-          <Field label="Moneda">
-            <Select value={filters.currency} onChange={set('currency')}>
-              <option value="">Todas</option>
-              <option value="USD">USD</option>
-              <option value="VES">VES</option>
-            </Select>
-          </Field>
-          <Field label="Tipo">
-            <Select value={filters.type} onChange={set('type')}>
-              <option value="">Todos</option>
-              <option value="PAYIN">Pago entrante</option>
-              <option value="PAYOUT">Retiro</option>
-            </Select>
-          </Field>
-          <Field label="Desde">
-            <Input type="date" value={filters.from} onChange={set('from')} />
-          </Field>
-          <Field label="Hasta">
-            <Input type="date" value={filters.to} onChange={set('to')} />
-          </Field>
-        </div>
-        {active ? (
-          <button
-            type="button"
-            onClick={() => setFilters(EMPTY)}
-            className="mt-[var(--space-xs)] text-[length:var(--text-sm)] text-[var(--color-accent)] underline-offset-4 hover:underline"
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h1 className="text-2xl font-bold tracking-tight">Transacciones</h1>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={exportingExcel || rows.length === 0}
+            className="gap-2 cursor-pointer text-xs font-semibold"
           >
-            Limpiar filtros
-          </button>
-        ) : null}
+            <FileSpreadsheet size={14} className="text-green-600" />
+            {exportingExcel ? 'Exportando…' : 'Exportar Excel'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportPdf}
+            disabled={exportingPdf || rows.length === 0}
+            className="gap-2 cursor-pointer text-xs font-semibold"
+          >
+            <FileText size={14} className="text-red-500" />
+            {exportingPdf ? 'Exportando…' : 'Exportar PDF'}
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base font-semibold text-[var(--foreground)]">Filtros</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-1.5">
+              <Label>Estado</Label>
+              <Select value={filters.status} onChange={set('status')}>
+                <option value="">Todos</option>
+                <option value="PENDING">Pendiente</option>
+                <option value="COMPLETED">Completado</option>
+                <option value="FAILED">Fallido</option>
+                <option value="REFUNDED">Reembolsado</option>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Moneda</Label>
+              <Select value={filters.currency} onChange={set('currency')}>
+                <option value="">Todas</option>
+                <option value="USD">USD</option>
+                <option value="VES">VES</option>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Desde</Label>
+              <Input type="date" value={filters.from} onChange={set('from')} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Hasta</Label>
+              <Input type="date" value={filters.to} onChange={set('to')} />
+            </div>
+          </div>
+        </CardContent>
       </Card>
 
-      {error ? <Notice kind="err">{error}</Notice> : null}
+      {error ? <p className="text-sm text-[var(--destructive)]">{error}</p> : null}
 
-      <Card className="p-[var(--space-md)]">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Referencia</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Pasarela</TableHead>
-              <TableHead className="text-right">Monto</TableHead>
-              <TableHead className="text-right">Comisión</TableHead>
-              <TableHead className="text-right">Neto</TableHead>
-              <TableHead className="text-right">USD equiv.</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Fecha</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
+      <Card>
+        <CardContent className="pt-6">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={10} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
-                  Sin resultados para estos filtros.
-                </TableCell>
+                <TableHead>Referencia</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Gateway</TableHead>
+                <TableHead>Monto</TableHead>
+                <TableHead>Comisión</TableHead>
+                <TableHead>Neto</TableHead>
+                <TableHead>Reembolsado</TableHead>
+                <TableHead>USD equiv.</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Acciones</TableHead>
               </TableRow>
-            ) : (
-              rows.map((t) => (
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow><TableCell className="text-[var(--muted-foreground)]">Sin resultados</TableCell></TableRow>
+              ) : rows.map((t) => (
                 <TableRow key={t.id}>
-                  <TableCell className="num text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
-                    {t.reference.slice(0, 14)}
+                  <TableCell className="font-mono text-xs">{t.reference.slice(0, 14)}</TableCell>
+                  <TableCell>
+                    {t.customerId ? (
+                      <Link
+                        href={`/customers/${t.customerId}`}
+                        className="font-medium text-[var(--blue-700)] hover:underline"
+                      >
+                        {t.customerName ?? 'Ver cliente'}
+                      </Link>
+                    ) : (
+                      <span className="text-[var(--muted-foreground)]">{t.customerName ?? '—'}</span>
+                    )}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-[var(--color-ink)]">
-                    {typeLabel(t.type)}
-                  </TableCell>
-                  <TableCell className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-                    {t.provider ?? '—'}
-                  </TableCell>
-                  <TableCell className="num text-right text-[var(--color-ink)]">
-                    {formatMoney(t.amount, t.currency)}
-                  </TableCell>
-                  <TableCell className="num text-right text-[var(--color-ink-4)]">
+                  <TableCell className="text-[var(--muted-foreground)]">{t.provider ?? '—'}</TableCell>
+                  <TableCell>{formatMoney(t.amount, t.currency)}</TableCell>
+                  <TableCell className="text-[var(--muted-foreground)]">
                     {t.feeAmount ? formatMoney(t.feeAmount, t.currency) : '—'}
                   </TableCell>
-                  <TableCell className="num text-right">
-                    {t.netAmount ? formatMoney(t.netAmount, t.currency) : '—'}
+                  <TableCell>{t.netAmount ? formatMoney(t.netAmount, t.currency) : '—'}</TableCell>
+                  <TableCell className="text-[var(--destructive)]">
+                    {t.refundedAmount && Number(t.refundedAmount) > 0 ? formatMoney(t.refundedAmount, t.currency) : '—'}
                   </TableCell>
-                  <TableCell className="num text-right">
-                    {t.usdEquivalent ? formatMoney(t.usdEquivalent, 'USD') : '—'}
-                  </TableCell>
+                  <TableCell>{t.usdEquivalent ? formatMoney(t.usdEquivalent, 'USD') : '—'}</TableCell>
+                  <TableCell><StatusBadge status={t.status} /></TableCell>
+                  <TableCell className="text-[var(--muted-foreground)]">{formatDate(t.createdAt)}</TableCell>
                   <TableCell>
-                    <StatusBadge status={t.status} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-right text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-                    {formatDate(t.createdAt)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1.5">
-                      {t.status === 'PENDING' ? (
+                    <div className="flex gap-2">
+                      {/* Pagos pendientes los liquida la pasarela/webhook, no el comercio. */}
+                      {t.status === 'AUTHORIZED' ? (
                         <>
                           <Button
                             size="sm"
                             variant="outline"
                             disabled={busyId === t.id}
-                            onClick={() => runAction(t.id, api.confirmTransaction)}
+                            onClick={() =>
+                              runAction(t.id, api.captureTransaction, '¿Capturar los fondos de esta transacción?')
+                            }
                           >
-                            Confirmar
+                            Capturar
                           </Button>
                           <Button
                             size="sm"
                             variant="destructive"
                             disabled={busyId === t.id}
                             onClick={() =>
-                              runAction(t.id, api.rejectTransaction, '¿Rechazar esta transacción?')
+                              runAction(t.id, api.voidTransaction, '¿Anular la autorización de esta transacción?')
                             }
                           >
-                            Rechazar
+                            Anular
                           </Button>
                         </>
                       ) : null}
@@ -203,9 +245,12 @@ export default function TransactionsPage() {
                             size="sm"
                             variant="outline"
                             disabled={busyId === t.id}
-                            onClick={() =>
-                              runAction(t.id, api.refundTransaction, '¿Reembolsar esta transacción?')
-                            }
+                            onClick={() => {
+                              setRefundingTx(t);
+                              setCustomRefundAmount('');
+                              setIsPartial(false);
+                              setRefundError(null);
+                            }}
                           >
                             Reembolsar
                           </Button>
@@ -228,20 +273,136 @@ export default function TransactionsPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
       </Card>
-    </div>
-  );
-}
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <Label>{label}</Label>
-      {children}
+      {/* Modal de Reembolsos */}
+      {refundingTx && (() => {
+        const net = Number(refundingTx.netAmount ?? refundingTx.amount);
+        const refunded = Number(refundingTx.refundedAmount ?? 0);
+        const remaining = net - refunded;
+
+        const handleRefundSubmit = async (e: React.FormEvent) => {
+          e.preventDefault();
+          setRefundError(null);
+          setRefundSubmitting(true);
+          try {
+            const amountToSend = isPartial ? customRefundAmount : undefined;
+            if (isPartial) {
+              const numAmount = Number(customRefundAmount);
+              if (isNaN(numAmount) || numAmount <= 0) {
+                throw new Error('Monto inválido');
+              }
+              if (numAmount > remaining) {
+                throw new Error('El monto supera el disponible restante para reembolsar');
+              }
+            }
+            await api.refundTransaction(refundingTx.id, amountToSend);
+            setRefundingTx(null);
+            load();
+          } catch (err) {
+            setRefundError(err instanceof Error ? err.message : 'Error al procesar el reembolso');
+          } finally {
+            setRefundSubmitting(false);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <Card className="w-full max-w-md p-6 bg-white border border-[var(--border)] shadow-[var(--shadow-lg)]">
+              <CardHeader className="p-0 mb-4">
+                <CardTitle className="text-lg font-bold text-[var(--text-strong)]">Reembolsar Transacción</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 space-y-4">
+                <p className="text-xs text-[var(--text-muted)] font-mono mb-2">
+                  Ref: {refundingTx.reference}
+                </p>
+
+                <div className="grid grid-cols-3 gap-2 bg-[var(--ink-50)] p-3 rounded-md text-xs font-semibold text-center">
+                  <div>
+                    <div className="text-[var(--text-subtle)] text-[10px] uppercase">Neto Original</div>
+                    <div className="text-[var(--text-strong)] mt-0.5">{formatMoney(net.toString(), refundingTx.currency)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-subtle)] text-[10px] uppercase">Reembolsado</div>
+                    <div className="text-[var(--text-strong)] mt-0.5">{formatMoney(refunded.toString(), refundingTx.currency)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-subtle)] text-[10px] uppercase">Restante</div>
+                    <div className="text-[var(--text-strong)] mt-0.5">{formatMoney(remaining.toString(), refundingTx.currency)}</div>
+                  </div>
+                </div>
+
+                <form onSubmit={handleRefundSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Tipo de Reembolso</Label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 text-sm text-[var(--text-body)] cursor-pointer">
+                        <input
+                          type="radio"
+                          name="refundType"
+                          checked={!isPartial}
+                          onChange={() => setIsPartial(false)}
+                          className="accent-[var(--primary)]"
+                        />
+                        <span>Total ({formatMoney(remaining.toString(), refundingTx.currency)})</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[var(--text-body)] cursor-pointer">
+                        <input
+                          type="radio"
+                          name="refundType"
+                          checked={isPartial}
+                          onChange={() => setIsPartial(true)}
+                          className="accent-[var(--primary)]"
+                        />
+                        <span>Parcial</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {isPartial && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Monto a Reembolsar ({refundingTx.currency})</Label>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={customRefundAmount}
+                        onChange={(e) => setCustomRefundAmount(e.target.value)}
+                        required
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+
+                  {refundError && (
+                    <p className="text-xs text-[var(--destructive)] font-medium bg-[var(--danger-100)] p-2 rounded-md">
+                      {refundError}
+                    </p>
+                  )}
+
+                  <div className="flex justify-end gap-3.5 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={refundSubmitting}
+                      onClick={() => setRefundingTx(null)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={refundSubmitting}>
+                      {refundSubmitting ? 'Procesando…' : 'Reembolsar'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }
