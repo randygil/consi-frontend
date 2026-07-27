@@ -93,8 +93,18 @@ hand-roll a per-page variant.
 `<PageHead>`, the theme, and the graphite code voice, and they cross-link.
 
 The reference page is three columns — **section index · prose · sticky
-request/response panel** — collapsing to index-strip-on-top below `lg`, and the
-panel dropping under the prose below `xl`. Rules that hold:
+request/response panel** — collapsing to index-strip-on-top below 1024px, and
+the panel dropping under the prose below **1400px**. That threshold is measured,
+not guessed: the 244px app rail plus a side panel leaves the prose column ~426px
+at 1280, which crushes the parameter table's description column to ~130px. A
+wide prose column beats a side-by-side panel on a 1280 laptop.
+
+Both breakpoints on that grid are written as `min-[1024px]:` / `min-[1400px]:`,
+never `lg:` + `min-[1400px]:`. Tailwind emits arbitrary min-width variants
+*before* the named ones, so mixing them lets `lg:` win at 1440 and the third
+column silently never appears.
+
+Rules that hold:
 
 - **Sections are shareable.** `/docs#webhooks` opens on webhooks. Section
   switching uses `history.replaceState`, never `location.hash` — the latter

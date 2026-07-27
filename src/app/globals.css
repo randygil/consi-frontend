@@ -140,9 +140,11 @@ h4 {
   color: var(--color-ink);
 }
 
-/* Inline code is a hairline chip, not a highlighter. `:not([class])` keeps this
- * off the <code class="language-*"> that the syntax highlighter emits. */
-.doc-prose code:not([class]) {
+/* Inline code is a hairline chip, not a highlighter. The `:not(pre) >` guard is
+ * load-bearing: react-syntax-highlighter emits a bare <code> inside its <pre>
+ * when given a custom style object, so without it every graphite code card gets
+ * a near-white chip painted behind its text in light mode. */
+.doc-prose :not(pre) > code:not([class]) {
   font-family: var(--font-mono);
   font-size: 0.9em;
   padding: 0.1em 0.32em;

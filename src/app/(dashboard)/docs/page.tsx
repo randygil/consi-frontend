@@ -992,6 +992,7 @@ function RequestPanel({
   reqLang,
   res,
   resLabel,
+  resStatus,
   tabs,
   tabValue,
   onTab,
@@ -1002,6 +1003,9 @@ function RequestPanel({
   reqLang: string;
   res: string;
   resLabel: string;
+  /** Only a real HTTP response carries a status. Webhook bodies and postMessage
+   * payloads are not responses — labelling them "200 OK" would be a lie. */
+  resStatus?: string;
   tabs: readonly { id: string; label: string }[];
   tabValue: string;
   onTab: (id: string) => void;
@@ -1022,7 +1026,11 @@ function RequestPanel({
 
       <div className="flex items-center justify-between border-y border-[var(--color-graphite-rule)] px-[var(--space-xs)] py-2">
         <span className="label text-[var(--color-on-graphite-3)]">{resLabel}</span>
-        <span className="num text-[length:var(--text-2xs)] text-[var(--color-tok-str)]">200 OK</span>
+        {resStatus ? (
+          <span className="num text-[length:var(--text-2xs)] text-[var(--color-tok-str)]">
+            {resStatus}
+          </span>
+        ) : null}
       </div>
 
       <CodeBlock
@@ -1489,6 +1497,7 @@ export default function DocsPage() {
       reqLang: toPrismLang(lang),
       res: responses[id],
       resLabel: 'Respuesta',
+      resStatus: '200 OK',
       tabs: API_TABS as readonly { id: string; label: string }[],
       tabValue: lang as string,
       onTab: (next: string) => setLang(next as ApiLang),
@@ -1536,7 +1545,10 @@ export default function DocsPage() {
         ))}
       </nav>
 
-      <div className="grid items-start gap-[var(--space-md)] lg:grid-cols-[9.5rem_minmax(0,1fr)] xl:grid-cols-[9.5rem_minmax(0,1fr)_21rem] 2xl:grid-cols-[10rem_minmax(0,1fr)_26rem]">
+      {/* Three columns only from 2xl. At 1280 the app rail already eats 244px, and
+        * squeezing a side panel in on top left the reference table's description
+        * column at ~130px — the panel drops under the prose instead. */}
+      <div className="grid items-start gap-[var(--space-md)] min-[1024px]:grid-cols-[9.5rem_minmax(0,1fr)] min-[1400px]:grid-cols-[10rem_minmax(0,1fr)_24rem]">
         {/* ── Columna 1 · índice ─────────────────────────────────────────── */}
         <nav
           aria-label="Secciones de la documentación"
@@ -1876,7 +1888,7 @@ if (res.token) {
 
               <h3>Consi.checkout(options)</h3>
               <div className="mt-[var(--space-2xs)]">
-                <Table>
+                <Table className="min-w-[26rem]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Opción</TableHead>
@@ -2068,7 +2080,7 @@ if (res.token) {
                                 ? 'Parámetros de ruta'
                                 : 'Parámetros del cuerpo'}
                             </div>
-                            <Table>
+                            <Table className="min-w-[26rem]">
                               <TableHeader>
                                 <TableRow>
                                   <TableHead>Campo</TableHead>
@@ -2278,7 +2290,7 @@ if (res.token) {
                 resultado.
               </p>
               <div className="mt-[var(--space-2xs)]">
-                <Table>
+                <Table className="min-w-[26rem]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Número</TableHead>
@@ -2351,7 +2363,7 @@ if (res.token) {
         </div>
 
         {/* ── Columna 3 · petición / respuesta ───────────────────────────── */}
-        <div className="min-w-0 xl:sticky xl:top-[var(--space-md)]">
+        <div className="min-w-0 min-[1024px]:col-start-2 min-[1400px]:col-start-3 min-[1400px]:sticky min-[1400px]:top-[var(--space-md)]">
           <RequestPanel {...panel} />
           {section === 'endpoints' ? (
             <p className="label pt-[var(--space-2xs)]">Mostrando · {endpoint.title}</p>

@@ -109,6 +109,11 @@ export function CodeBlock({
           fontSize: '11.5px',
           lineHeight: 1.65,
           maxHeight,
+          // Replacing Prism's stylesheet wholesale drops its `overflow: auto` on
+          // <pre>. Without this a long curl line is silently clipped by the
+          // card's overflow-hidden and there is no way to read the rest.
+          overflow: 'auto',
+          overscrollBehavior: 'contain',
           background: 'transparent',
           borderRadius: 0,
         }}
