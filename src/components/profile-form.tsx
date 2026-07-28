@@ -243,7 +243,10 @@ function MerchantCard() {
         <dl className="border-t border-[var(--color-rule)]">
           <Row label="Razón social" value={merchant.businessName} />
           <Row label="Webhook" value={merchant.webhookUrl ?? 'Sin configurar'} num />
-          <Row label="Liquidación" value={merchant.autoSettle ? 'Automática' : 'Manual'} />
+          <Row
+            label="Retiro automático"
+            value={merchant.autoSettle ? 'Activado' : 'Desactivado'}
+          />
         </dl>
         <p className="mt-[var(--space-sm)] text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
           Estos datos se editan desde Desarrolladores y Ajustes, no desde tu perfil.

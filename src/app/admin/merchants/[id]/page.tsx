@@ -269,7 +269,7 @@ function RiskPolicyCard({
           )}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="pol-disp" className="text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
-              Dispersión automática
+              Cadencia del retiro automático
             </label>
             <select
               id="pol-disp"

@@ -20,11 +20,15 @@ const TONE: Record<TransactionStatus, string> = {
 const chip =
   'inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)]';
 
-export function StatusBadge({ status }: { status: TransactionStatus }) {
+/**
+ * `label` overrides the text but keeps the tone: one PENDING payout may be waiting
+ * on an admin and another on the bank — same state machine, different thing to do.
+ */
+export function StatusBadge({ status, label }: { status: TransactionStatus; label?: string }) {
   return (
     <span className={cn(chip, TONE[status])}>
       <span className="size-1.5 rounded-full bg-current" aria-hidden />
-      {statusLabel(status)}
+      {label ?? statusLabel(status)}
     </span>
   );
 }

@@ -229,7 +229,7 @@ export default function AdminDashboardPage() {
         <Queue title="Retiros manuales" count={pendingPayouts.length}>
           <DataTable
             id="admin-pending-payouts"
-            caption="Retiros pendientes de liquidación"
+            caption="Retiros pendientes de aprobación"
             columns={payoutColumns}
             rows={pendingPayouts}
             rowKey={(p) => p.id}

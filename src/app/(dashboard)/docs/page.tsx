@@ -180,7 +180,7 @@ const ENDPOINTS: EndpointMeta[] = [
         name: 'bankAccountId',
         type: 'string',
         required: false,
-        desc: 'Liquidación a tu cuenta bancaria registrada. Úsalo para retiros del comercio. Excluyente con destination.',
+        desc: 'Retiro a tu propia cuenta bancaria registrada. Excluyente con destination.',
       },
       {
         name: 'destination',

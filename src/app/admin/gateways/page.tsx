@@ -371,7 +371,7 @@ export default function AdminGatewaysPage() {
             />
             <p className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
               El retiro del cliente valida su objeto <span className="num">destination</span> contra
-              estos campos. Vacío = sólo liquidación a cuenta bancaria.
+              estos campos. Vacío = sólo retiro a la cuenta bancaria del comercio.
             </p>
           </Field>
 

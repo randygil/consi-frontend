@@ -61,6 +61,8 @@ export interface Transaction {
   reserveReleaseAt?: string | null;
   reserveReleasedAt?: string | null;
   expiresAt?: string | null;
+  /** Payouts only. MANUAL = parked waiting for an admin to approve it. */
+  payoutMode?: PayoutMode | null;
   provider?: string | null;
   method?: PaymentMethod | null;
   order?: string | null;

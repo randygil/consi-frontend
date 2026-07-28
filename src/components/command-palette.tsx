@@ -13,7 +13,7 @@ export interface Command {
   href: string;
 }
 
-/** Case- and accent-insensitive so "Liquidaciones" matches a typed "liquid". */
+/** Case- and accent-insensitive so "Retenciones" matches a typed "retencion". */
 function normalize(s: string): string {
   return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 }

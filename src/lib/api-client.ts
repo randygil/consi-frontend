@@ -184,13 +184,10 @@ export const api = {
   updateCustomer: (id: string, input: CustomerInput) =>
     request<Customer>(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
 
-  getSettlementsPending: () => request<Transaction[]>('/settlements/pending'),
-  runSettlement: () =>
-    request<{ released: number; evaluated: number }>('/settlements/run', {
-      method: 'POST',
-    }),
-  /** CSV settlement report as a Blob (caller triggers the browser download). */
-  downloadSettlementReport: async (params: { from?: string; to?: string; currency?: string }) => {
+  /** Payins still inside the retention window ("retenciones"). */
+  getRetentions: () => request<Transaction[]>('/settlements/pending'),
+  /** CSV movements report as a Blob (caller triggers the browser download). */
+  downloadMovementsReport: async (params: { from?: string; to?: string; currency?: string }) => {
     const token = getToken();
     const qs = new URLSearchParams(
       Object.entries(params)

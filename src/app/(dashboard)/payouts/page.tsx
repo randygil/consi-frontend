@@ -20,6 +20,7 @@ import { Notice, PageHead } from '@/components/ui/page-head';
 import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney, statusLabel } from '@/lib/format';
+import { walletSplit } from '@/lib/money-state';
 import type {
   BankAccount,
   Currency,
@@ -38,6 +39,18 @@ const CURRENCY_COPY: Record<Currency, { title: string; destination: string }> = 
   USDT: { title: 'Tether (USDT)', destination: 'billetera cripto' },
 };
 
+/**
+ * A PENDING payout is one of two different things: parked waiting for an admin
+ * (MANUAL — over the approval threshold, or a rail an operator settles by hand), or
+ * already on its way to the bank. Same enum value, opposite answers to "and now what".
+ */
+const payoutStatusLabel = (t: Transaction) =>
+  t.status !== 'PENDING'
+    ? statusLabel(t.status)
+    : t.payoutMode === 'MANUAL'
+      ? 'Esperando aprobación'
+      : 'En camino al banco';
+
 const ACCOUNT_STATUS: Record<BankAccount['status'], { text: string; tone: string }> = {
   APPROVED: { text: 'Aprobada', tone: 'text-[var(--color-ok)] bg-[var(--color-ok-soft)]' },
   PENDING: { text: 'Pendiente', tone: 'text-[var(--color-warn)] bg-[var(--color-warn-soft)]' },
@@ -51,9 +64,10 @@ const COLUMNS: Column<Transaction>[] = [
     num: true,
     align: 'left',
     value: (t) => t.reference,
+    // Whole reference — the trailing counter is the only part that differs.
     cell: (t) => (
-      <span className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
-        {t.reference.slice(0, 14)}
+      <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+        {t.reference}
       </span>
     ),
   },
@@ -94,8 +108,8 @@ const COLUMNS: Column<Transaction>[] = [
     id: 'status',
     header: 'Estado',
     value: (t) => t.status,
-    text: (t) => statusLabel(t.status),
-    cell: (t) => <StatusBadge status={t.status} />,
+    text: payoutStatusLabel,
+    cell: (t) => <StatusBadge status={t.status} label={payoutStatusLabel(t)} />,
   },
   {
     id: 'createdAt',
@@ -115,8 +129,22 @@ export default function PayoutsPage() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [payouts, setPayouts] = useState<Transaction[]>([]);
+  // Payouts already requested but not settled. Fetched apart from `payouts` because
+  // that list follows the table filters and this figure must not.
+  const [inFlight, setInFlight] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ status: '', currency: '' });
+
+  // Standing order: disperse every released balance automatically (Merchant.autoSettle).
+  const [autoPayout, setAutoPayout] = useState(false);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoMsg, setAutoMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  useEffect(() => {
+    api
+      .getProfile()
+      .then((p) => setAutoPayout(p.autoSettle))
+      .catch(() => {});
+  }, []);
 
   // The whole request flow is scoped to ONE settlement asset at a time.
   const [currency, setCurrency] = useState<Currency>('USD');
@@ -165,9 +193,14 @@ export default function PayoutsPage() {
   }, [filters]);
 
   const refresh = useCallback(async () => {
-    const [a, w] = await Promise.all([api.getBankAccounts(), api.getBalances()]);
+    const [a, w, p] = await Promise.all([
+      api.getBankAccounts(),
+      api.getBalances(),
+      api.getTransactions({ type: 'PAYOUT', status: 'PENDING' }),
+    ]);
     setAccounts(a);
     setWallets(w);
+    setInFlight(p);
   }, []);
 
   useEffect(() => {
@@ -238,6 +271,25 @@ export default function PayoutsPage() {
     }
   }
 
+  async function toggleAutoPayout(next: boolean) {
+    setAutoPayout(next);
+    setAutoBusy(true);
+    setAutoMsg(null);
+    try {
+      await api.updateSettings({ autoSettle: next });
+      setAutoMsg({
+        kind: 'ok',
+        text: next ? 'Retiro automático activado.' : 'Retiro automático desactivado.',
+      });
+      setTimeout(() => setAutoMsg(null), 3000);
+    } catch (err) {
+      setAutoPayout(!next); // revert the optimistic flip
+      setAutoMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Error al guardar' });
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
   async function submitBank(e: React.FormEvent) {
     e.preventDefault();
     setRegMsg(null);
@@ -272,15 +324,16 @@ export default function PayoutsPage() {
     <div className="flex flex-col gap-[var(--space-md)]">
       <PageHead
         title="Retiros"
-        lede="Cada moneda es un saldo independiente: lo que recibes en USDT se retira en USDT y lo que recibes en bolívares se retira en bolívares. Sin conversiones."
+        lede="Sacar tu dinero al banco. Cada moneda es un saldo independiente: lo que recibes en USDT se retira en USDT y lo que recibes en bolívares se retira en bolívares, sin conversiones. Lo que aparece como retenido se libera solo y cae aquí como disponible."
       />
 
       {/* 1 · Saldos por moneda. Elegir una tarjeta acota todo el flujo a ese ledger. */}
       <div className="grid gap-[var(--space-sm)] sm:grid-cols-3">
         {CURRENCIES.map((c) => {
-          const w = walletFor(c);
-          const avail = Number(w?.available ?? 0);
-          const held = Math.max(0, Number(w?.balance ?? 0) - avail);
+          const { available: avail, held, sending } = walletSplit(
+            walletFor(c),
+            inFlight.filter((t) => t.currency === c),
+          );
           const active = c === currency;
           return (
             <button
@@ -301,8 +354,25 @@ export default function PayoutsPage() {
                 {formatMoney(avail, c)}
               </div>
               <div className="mt-0.5 text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-                {held > 0 ? `${formatMoney(held, c)} en retención` : 'Disponible para retirar'}
+                Disponible para retirar
               </div>
+              {/* The other two states of the same money, only when there is any. */}
+              {held > 0 || sending > 0 ? (
+                <dl className="mt-2 space-y-0.5 border-t border-[var(--color-rule)] pt-2 text-[length:var(--text-xs)]">
+                  {held > 0 ? (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[var(--color-ink-4)]">Retenido</dt>
+                      <dd className="num text-[var(--color-warn)]">{formatMoney(held, c)}</dd>
+                    </div>
+                  ) : null}
+                  {sending > 0 ? (
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-[var(--color-ink-4)]">En camino</dt>
+                      <dd className="num text-[var(--color-ink-3)]">{formatMoney(sending, c)}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
             </button>
           );
         })}
@@ -407,8 +477,48 @@ export default function PayoutsPage() {
           )}
         </Card>
 
-        {/* 3 · Conversión explícita + cuentas de retiro (por moneda) + registro. */}
+        {/* 3 · Orden permanente + conversión + cuentas de retiro (por moneda) + registro. */}
         <div className="flex flex-col gap-[var(--space-md)]">
+          {/* Lives here, next to the manual form, because it produces RETIROS. It used
+              to sit on the retentions page, so turning it on made rows appear on a page
+              the merchant never linked to the switch. */}
+          <Card className="p-[var(--space-md)]">
+            <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Retiro automático</h2>
+            <label
+              htmlFor="autoPayout"
+              className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-sm)] border border-[var(--color-rule)] p-2.5 transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-rule-2)]"
+            >
+              <input
+                type="checkbox"
+                id="autoPayout"
+                checked={autoPayout}
+                disabled={autoBusy}
+                onChange={(e) => toggleAutoPayout(e.target.checked)}
+                className="mt-0.5 size-4 shrink-0 accent-[var(--color-accent)]"
+              />
+              <span>
+                <span className="block text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">
+                  Retirar mi saldo sin pedirlo cada vez
+                </span>
+                <span className="mt-0.5 block text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+                  Cada vez que se libere dinero, lo enviamos solos a tu destino principal de esa
+                  moneda. Paga la misma comisión que un retiro manual.
+                </span>
+              </span>
+            </label>
+            {approvedFor('USD').length + approvedFor('VES').length + approvedFor('USDT').length ===
+            0 ? (
+              <p className="mt-[var(--space-sm)] text-[length:var(--text-xs)] text-[var(--color-warn)]">
+                Necesitas al menos un destino principal aprobado para que funcione.
+              </p>
+            ) : null}
+            {autoMsg ? (
+              <div className="mt-[var(--space-sm)]">
+                <Notice kind={autoMsg.kind}>{autoMsg.text}</Notice>
+              </div>
+            ) : null}
+          </Card>
+
           <FxConverter wallets={wallets} onDone={refresh} />
 
           <Card className="p-[var(--space-md)]">

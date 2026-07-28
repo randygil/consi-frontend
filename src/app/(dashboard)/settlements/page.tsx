@@ -1,19 +1,37 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+/* Hallmark · genre: modern-minimal · macrostructure: 05 Workbench
+ * design-system: design.md · theme: Cobalt (light + dark)
+ *
+ * RETENCIONES — no "liquidaciones". Aquí no se mueve dinero a ningún lado: es el
+ * dinero que YA ES DEL COMERCIO pero todavía no es retirable. Se libera solo, por
+ * fecha. Sacarlo al banco es otra cosa y vive en /payouts.
+ */
+
+import { useEffect, useMemo, useState } from 'react';
+import { Card } from '@/components/ui/card';
 import { Column, DataTable } from '@/components/ui/data-table';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Notice, PageHead } from '@/components/ui/page-head';
-import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
-import type { Transaction } from '@/lib/types';
+import {
+  heldAmount as held,
+  holdReason as reasonOf,
+  holdReleaseDate as releaseDate,
+  type HoldReason,
+} from '@/lib/money-state';
+import type { Currency, Transaction } from '@/lib/types';
 
-/** Net is what actually lands, so it is the figure this table ranks and exports. */
-const net = (t: Transaction) => Number(t.netAmount ?? t.amount);
+const REASON_COPY: Record<HoldReason, { label: string; tone: string }> = {
+  RETENCION: {
+    label: 'Retención',
+    tone: 'text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
+  },
+  RESERVA: {
+    label: 'Reserva',
+    tone: 'text-[var(--color-accent)] bg-[var(--color-accent-soft)]',
+  },
+};
 
 const COLUMNS: Column<Transaction>[] = [
   {
@@ -22,9 +40,24 @@ const COLUMNS: Column<Transaction>[] = [
     num: true,
     align: 'left',
     value: (t) => t.reference,
+    // Whole reference: "CNS-0001-01-000123" is 18 chars and the trailing counter is
+    // the only part that differs — truncating to 14 made every row read the same.
     cell: (t) => (
-      <span className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
-        {t.reference.slice(0, 14)}
+      <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+        {t.reference}
+      </span>
+    ),
+  },
+  {
+    id: 'reason',
+    header: 'Motivo',
+    value: (t) => reasonOf(t),
+    text: (t) => REASON_COPY[reasonOf(t)].label,
+    cell: (t) => (
+      <span
+        className={`rounded-[var(--radius-xs)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] ${REASON_COPY[reasonOf(t)].tone}`}
+      >
+        {REASON_COPY[reasonOf(t)].label}
       </span>
     ),
   },
@@ -37,263 +70,121 @@ const COLUMNS: Column<Transaction>[] = [
     cell: (t) => <span className="text-[var(--color-ink-3)]">{t.currency}</span>,
   },
   {
-    id: 'net',
-    header: 'Neto',
+    id: 'held',
+    header: 'Retenido',
     num: true,
-    value: net,
-    text: (t) => formatMoney(net(t), t.currency),
+    value: held,
+    text: (t) => formatMoney(held(t), t.currency),
     cell: (t) => (
-      <span className="text-[var(--color-ink)]">{formatMoney(net(t), t.currency)}</span>
+      <span className="text-[var(--color-ink)]">{formatMoney(held(t), t.currency)}</span>
     ),
   },
   {
-    id: 'afterRetentionDate',
+    id: 'releaseDate',
     header: 'Se libera',
     num: true,
-    value: (t) => t.afterRetentionDate ?? '',
-    text: (t) => (t.afterRetentionDate ? formatDate(t.afterRetentionDate) : '—'),
-    cell: (t) => (
-      <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-        {t.afterRetentionDate ? formatDate(t.afterRetentionDate) : '—'}
-      </span>
-    ),
+    value: (t) => releaseDate(t) ?? '',
+    text: (t) => {
+      const d = releaseDate(t);
+      return d ? formatDate(d) : '—';
+    },
+    cell: (t) => {
+      const d = releaseDate(t);
+      return (
+        <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+          {d ? formatDate(d) : '—'}
+        </span>
+      );
+    },
   },
 ];
 
-export default function SettlementsPage() {
+export default function RetentionsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<{ released: number; evaluated: number } | null>(null);
-
-  const [autoSettle, setAutoSettle] = useState(false);
-  const [settingsSaving, setSettingsSaving] = useState(false);
-  const [settingsMessage, setSettingsMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(
-    null,
-  );
-
-  const load = useCallback(() => {
-    api
-      .getSettlementsPending()
-      .then(setRows)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Error'));
-  }, []);
-
-  const loadSettings = useCallback(() => {
-    api
-      .getProfile()
-      .then((p) => {
-        setAutoSettle(p.autoSettle);
-      })
-      .catch((e) => console.error('Failed to load merchant settings', e));
-  }, []);
 
   useEffect(() => {
-    load();
-    loadSettings();
-  }, [load, loadSettings]);
+    api
+      .getRetentions()
+      .then(setRows)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
+      .finally(() => setLoading(false));
+  }, []);
 
-  async function onRun() {
-    setRunning(true);
-    setError(null);
-    try {
-      const res = await api.runSettlement();
-      setResult(res);
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error');
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  async function onSaveSettings(e: React.FormEvent) {
-    e.preventDefault();
-    setSettingsSaving(true);
-    setSettingsMessage(null);
-    try {
-      await api.updateSettings({ autoSettle });
-      setSettingsMessage({ kind: 'ok', text: 'Configuración guardada.' });
-      setTimeout(() => setSettingsMessage(null), 3000);
-    } catch (err) {
-      setSettingsMessage({
-        kind: 'err',
-        text: err instanceof Error ? err.message : 'Error al guardar la configuración',
-      });
-    } finally {
-      setSettingsSaving(false);
-    }
-  }
-
-  const heldTotal = rows.length;
+  /** Totals per currency — the number the merchant actually came here for. */
+  const totals = useMemo(() => {
+    const acc = new Map<Currency, number>();
+    for (const t of rows) acc.set(t.currency, (acc.get(t.currency) ?? 0) + held(t));
+    return [...acc].filter(([, v]) => v > 0);
+  }, [rows]);
 
   return (
     <div className="flex flex-col gap-[var(--space-md)]">
       <PageHead
-        title="Liquidaciones"
-        lede="Fondos retenidos por el período de retención y cómo se dispersan al liberarse."
-        action={
-          <Button onClick={onRun} disabled={running}>
-            {running ? 'Procesando…' : 'Liberar fondos vencidos'}
-          </Button>
-        }
+        title="Retenciones"
+        lede="Ya es tuyo. Todavía no es retirable. Este dinero se libera solo en la fecha indicada y pasa a tu saldo disponible — no tienes que hacer nada."
       />
 
       {error ? <Notice kind="err">{error}</Notice> : null}
-      {result ? (
-        <Notice kind="ok">
-          Liberados {result.released} de {result.evaluated} evaluados.
-        </Notice>
+
+      {totals.length > 0 ? (
+        <div className="grid gap-[var(--space-sm)] sm:grid-cols-3">
+          {totals.map(([currency, amount]) => (
+            <Card key={currency} className="p-[var(--space-sm)]">
+              <div className="font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-ink-3)]">
+                Retenido en {currency}
+              </div>
+              <div className="num mt-1.5 truncate text-[length:var(--text-xl)] font-medium text-[var(--color-ink)]">
+                {formatMoney(amount, currency)}
+              </div>
+            </Card>
+          ))}
+        </div>
       ) : null}
 
-      <div className="grid gap-[var(--space-md)] lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Card className="p-[var(--space-md)]">
-          <div className="mb-[var(--space-sm)] flex items-baseline justify-between gap-[var(--space-sm)]">
-            <h2 className="text-[length:var(--text-md)]">Pendientes de liberación</h2>
-            <span className="label">
-              {heldTotal} {heldTotal === 1 ? 'retención' : 'retenciones'}
-            </span>
-          </div>
-          <DataTable
-            id="settlements"
-            caption="Fondos pendientes de liberación"
-            columns={COLUMNS}
-            rows={rows}
-            rowKey={(t) => t.id}
-            empty="No hay fondos retenidos."
-            searchPlaceholder="Buscar por referencia…"
-            defaultSort={{ id: 'afterRetentionDate', dir: 'asc' }}
-            exportFilename="retenciones_consi"
-          />
-        </Card>
+      <Card className="p-[var(--space-md)]">
+        <div className="mb-[var(--space-sm)] flex items-baseline justify-between gap-[var(--space-sm)]">
+          <h2 className="text-[length:var(--text-md)]">Cobros con fondos retenidos</h2>
+          <span className="label">
+            {rows.length} {rows.length === 1 ? 'cobro' : 'cobros'}
+          </span>
+        </div>
+        <DataTable
+          id="retentions"
+          caption="Cobros con fondos retenidos"
+          columns={COLUMNS}
+          rows={rows}
+          rowKey={(t) => t.id}
+          loading={loading}
+          empty="No tienes fondos retenidos: todo lo que has cobrado ya está disponible para retirar."
+          searchPlaceholder="Buscar por referencia…"
+          defaultSort={{ id: 'releaseDate', dir: 'asc' }}
+          exportFilename="retenciones_consi"
+        />
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Configuración</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={onSaveSettings} className="flex flex-col gap-[var(--space-sm)]">
-              {/* Native checkbox, accent-tinted via accent-color — no re-drawn control. */}
-              <label
-                htmlFor="autoSettle"
-                className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-sm)] border border-[var(--color-rule)] p-2.5 transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-rule-2)]"
-              >
-                <input
-                  type="checkbox"
-                  id="autoSettle"
-                  checked={autoSettle}
-                  onChange={(e) => setAutoSettle(e.target.checked)}
-                  className="mt-0.5 size-4 shrink-0 accent-[var(--color-accent)]"
-                />
-                <span>
-                  <span className="block text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">
-                    Dispersión automática
-                  </span>
-                  <span className="mt-0.5 block text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
-                    Transfiere el saldo disponible a tu cuenta principal cada vez que se liberen
-                    fondos.
-                  </span>
-                </span>
-              </label>
-
-              {settingsMessage ? (
-                <Notice kind={settingsMessage.kind}>{settingsMessage.text}</Notice>
-              ) : null}
-
-              <Button type="submit" disabled={settingsSaving} className="w-full">
-                {settingsSaving ? 'Guardando…' : 'Guardar configuración'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
-      <ReportDownload />
+      <Card className="p-[var(--space-md)]">
+        <h2 className="text-[length:var(--text-md)]">Por qué retenemos</h2>
+        <div className="mt-2 grid gap-[var(--space-sm)] text-[length:var(--text-sm)] text-[var(--color-ink-3)] sm:grid-cols-2">
+          <p>
+            <strong className="font-medium text-[var(--color-ink)]">Retención.</strong> Entre que
+            tu cliente paga y que ese dinero es irreversiblemente nuestro pasa un tiempo: el banco
+            tiene que confirmarlo y el pago todavía puede revertirse. Durante esa ventana el dinero
+            es tuyo, pero no sale.
+          </p>
+          <p>
+            <strong className="font-medium text-[var(--color-ink)]">Reserva.</strong> Si tu cuenta
+            tiene reserva configurada, un porcentaje de cada cobro queda apartado más tiempo para
+            cubrir contracargos posteriores. Se libera igual, solo que en su propia fecha.
+          </p>
+        </div>
+        <p className="mt-[var(--space-sm)] border-t border-[var(--color-rule)] pt-[var(--space-sm)] text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+          Liberar no es retirar. Cuando un monto se libera aparece como disponible en{' '}
+          <strong className="font-medium text-[var(--color-ink-3)]">Retiros</strong>, y desde ahí lo
+          mandas a tu banco.
+        </p>
+      </Card>
     </div>
-  );
-}
-
-/** Reporte de liquidación (CSV): bruto, comisión, IVA y neto por movimiento del período. */
-function ReportDownload() {
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [currency, setCurrency] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function download(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const blob = await api.downloadSettlementReport({
-        from: from ? new Date(from).toISOString() : undefined,
-        // Include the whole end day.
-        to: to ? new Date(`${to}T23:59:59.999`).toISOString() : undefined,
-        currency: currency || undefined,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `liquidaciones_consi_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al generar el reporte');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="p-[var(--space-md)]">
-      <h2 className="text-[length:var(--text-md)]">Reporte de liquidación</h2>
-      <p className="mb-[var(--space-sm)] mt-1 text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
-        CSV con bruto, comisión, IVA y neto de cada movimiento — por moneda y rail, listo para
-        contabilidad.
-      </p>
-      <form onSubmit={download} className="flex flex-wrap items-end gap-[var(--space-sm)]">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="rep-from">Desde</Label>
-          <Input
-            id="rep-from"
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="num"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="rep-to">Hasta</Label>
-          <Input
-            id="rep-to"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="num"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="rep-currency">Moneda</Label>
-          <Select
-            id="rep-currency"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="h-9 w-auto"
-          >
-            <option value="">Todas</option>
-            <option value="USD">USD</option>
-            <option value="VES">VES</option>
-            <option value="USDT">USDT</option>
-          </Select>
-        </div>
-        <Button type="submit" disabled={busy}>
-          {busy ? 'Generando…' : 'Descargar CSV'}
-        </Button>
-      </form>
-      {error ? (
-        <p className="mt-2 text-[length:var(--text-xs)] text-[var(--color-bad)]">{error}</p>
-      ) : null}
-    </Card>
   );
 }
