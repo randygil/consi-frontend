@@ -36,6 +36,13 @@ export function typeLabel(type: TransactionType): string {
 
 export function formatMoney(amount: string | number, currency: Currency): string {
   const value = typeof amount === 'string' ? Number(amount) : amount;
+  // USDT is not ISO 4217 — Intl throws RangeError on it. Format the number, suffix the code.
+  if (currency === 'USDT') {
+    return `${new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)} USDT`;
+  }
   const locale = currency === 'VES' ? 'es-VE' : 'en-US';
   return new Intl.NumberFormat(locale, {
     style: 'currency',

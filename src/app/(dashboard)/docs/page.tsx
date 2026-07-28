@@ -1156,6 +1156,7 @@ function SignatureGenerator({ keys }: { keys: ApiKeys | null }) {
             >
               <option value="USD">USD</option>
               <option value="VES">VES</option>
+              <option value="USDT">USDT</option>
             </Select>
           </div>
         </div>
@@ -1185,7 +1186,7 @@ function SignatureGenerator({ keys }: { keys: ApiKeys | null }) {
 }
 
 function SdkPlayground({ origin }: { origin: string }) {
-  const [currency, setCurrency] = useState<'USD' | 'VES'>('USD');
+  const [currency, setCurrency] = useState<'USD' | 'VES' | 'USDT'>('USD');
   const [amount, setAmount] = useState('100.00');
   const [description, setDescription] = useState('Prueba de integración SDK');
   const [mode, setMode] = useState<'mock' | 'live'>('mock');
@@ -1304,11 +1305,12 @@ function SdkPlayground({ origin }: { origin: string }) {
             <Select
               id="pg-currency"
               value={currency}
-              onChange={(e) => setCurrency(e.target.value as 'USD' | 'VES')}
+              onChange={(e) => setCurrency(e.target.value as 'USD' | 'VES' | 'USDT')}
               className="num"
             >
               <option value="USD">USD</option>
               <option value="VES">VES</option>
+              <option value="USDT">USDT</option>
             </Select>
           </div>
         </div>

@@ -17,11 +17,15 @@ import type {
   Dispute,
   Environment,
   ExchangeRate,
+  FxQuote,
+  LedgerEntry,
+  MerchantPolicy,
   MerchantProfile,
   OnboardMerchantInput,
   OpsNotification,
   PaymentLinkSummary,
   PaymentMethod,
+  PayoutQuote,
   PlatformStats,
   Transaction,
   Wallet,
@@ -113,17 +117,43 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  createPayout: (input: {
-    currency: Currency;
-    amount: string;
-    bankAccountId?: string;
-    destination?: Record<string, string>;
-    description?: string;
-  }) =>
+  createPayout: (
+    input: {
+      currency: Currency;
+      amount: string;
+      bankAccountId?: string;
+      destination?: Record<string, string>;
+      description?: string;
+    },
+    idempotencyKey?: string,
+  ) =>
     request<Transaction>('/transactions/payout', {
       method: 'POST',
       body: JSON.stringify(input),
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
     }),
+  payoutQuote: (input: { currency: Currency; amount: string }) =>
+    request<PayoutQuote>('/transactions/payout/quote', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  // ---- Ledger (Movimientos) ----
+  getLedger: (params: { currency?: string; take?: number } = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== '')
+        .map(([k, v]) => [k, String(v)]),
+    ).toString();
+    return request<LedgerEntry[]>(`/merchant/ledger${qs ? `?${qs}` : ''}`);
+  },
+
+  // ---- FX (conversión explícita: cotizar → aceptar) ----
+  fxQuote: (input: { fromCurrency: Currency; toCurrency: Currency; amount: string }) =>
+    request<FxQuote>('/fx/quotes', { method: 'POST', body: JSON.stringify(input) }),
+  fxAccept: (id: string) =>
+    request<FxQuote>(`/fx/quotes/${id}/accept`, { method: 'POST' }),
+  fxListQuotes: () => request<FxQuote[]>('/fx/quotes'),
   refundTransaction: (id: string, amount?: string) =>
     request<Transaction>(`/transactions/${id}/refund`, {
       method: 'POST',
@@ -156,6 +186,21 @@ export const api = {
     request<{ released: number; evaluated: number }>('/settlements/run', {
       method: 'POST',
     }),
+  /** CSV settlement report as a Blob (caller triggers the browser download). */
+  downloadSettlementReport: async (params: { from?: string; to?: string; currency?: string }) => {
+    const token = getToken();
+    const qs = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== '')
+        .map(([k, v]) => [k, String(v)]),
+    ).toString();
+    const res = await fetch(`${BASE}/settlements/report${qs ? `?${qs}` : ''}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`No se pudo generar el reporte (${res.status})`);
+    return res.blob();
+  },
 
   getLatestRate: () => request<ExchangeRate>('/exchange-rates/latest'),
 
@@ -180,6 +225,11 @@ export const api = {
   adminCreateMerchant: (input: OnboardMerchantInput) =>
     request<{ id: string; businessName: string }>('/admin/merchants', {
       method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  adminUpdateMerchantPolicy: (id: string, input: Partial<MerchantPolicy>) =>
+    request<MerchantPolicy & { id: string }>(`/admin/merchants/${id}/policy`, {
+      method: 'PATCH',
       body: JSON.stringify(input),
     }),
   adminGetPendingBankAccounts: () =>

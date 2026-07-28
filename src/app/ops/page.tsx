@@ -327,6 +327,7 @@ function CreateAccountCard({ onCreated }: { onCreated: () => Promise<void> }) {
             >
               <option value="VES">VES</option>
               <option value="USD">USD</option>
+              <option value="USDT">USDT</option>
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">

@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Column, DataTable } from '@/components/ui/data-table';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Notice, PageHead } from '@/components/ui/page-head';
+import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Transaction } from '@/lib/types';
@@ -204,6 +207,93 @@ export default function SettlementsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ReportDownload />
     </div>
+  );
+}
+
+/** Reporte de liquidación (CSV): bruto, comisión, IVA y neto por movimiento del período. */
+function ReportDownload() {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [currency, setCurrency] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function download(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const blob = await api.downloadSettlementReport({
+        from: from ? new Date(from).toISOString() : undefined,
+        // Include the whole end day.
+        to: to ? new Date(`${to}T23:59:59.999`).toISOString() : undefined,
+        currency: currency || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `liquidaciones_consi_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al generar el reporte');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-[var(--space-md)]">
+      <h2 className="text-[length:var(--text-md)]">Reporte de liquidación</h2>
+      <p className="mb-[var(--space-sm)] mt-1 text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+        CSV con bruto, comisión, IVA y neto de cada movimiento — por moneda y rail, listo para
+        contabilidad.
+      </p>
+      <form onSubmit={download} className="flex flex-wrap items-end gap-[var(--space-sm)]">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rep-from">Desde</Label>
+          <Input
+            id="rep-from"
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="num"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rep-to">Hasta</Label>
+          <Input
+            id="rep-to"
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="num"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rep-currency">Moneda</Label>
+          <Select
+            id="rep-currency"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className="h-9 w-auto"
+          >
+            <option value="">Todas</option>
+            <option value="USD">USD</option>
+            <option value="VES">VES</option>
+            <option value="USDT">USDT</option>
+          </Select>
+        </div>
+        <Button type="submit" disabled={busy}>
+          {busy ? 'Generando…' : 'Descargar CSV'}
+        </Button>
+      </form>
+      {error ? (
+        <p className="mt-2 text-[length:var(--text-xs)] text-[var(--color-bad)]">{error}</p>
+      ) : null}
+    </Card>
   );
 }

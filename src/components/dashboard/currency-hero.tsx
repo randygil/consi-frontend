@@ -1,78 +1,63 @@
 import { ArrowLeftRight } from 'lucide-react';
 import { GraphiteCard } from '@/components/ui/card';
 import { formatMoney, formatRate } from '@/lib/format';
+import type { Currency, Wallet } from '@/lib/types';
 
 interface CurrencyHeroProps {
-  usdAvailable: number;
-  vesAvailable: number;
-  totalUsd: number;
+  wallets: Wallet[];
   rate: number;
   updatedLabel?: string;
 }
 
+/** Fixed display order: fiat first, crypto last. */
+const CURRENCY_ORDER: Currency[] = ['USD', 'VES', 'USDT'];
+
 /**
- * The page's one dark beat: a graphite instrument readout carrying both wallet
- * balances and the live BCV rate between them. Everything is mono and tabular —
- * these are the numbers the merchant is actually here to read.
+ * The page's one dark beat: a graphite instrument readout with one cell per
+ * settlement asset. Each balance is its own ledger — nothing is summed or
+ * converted across assets; the BCV rate below is reference only.
  */
-export function CurrencyHero({
-  usdAvailable,
-  vesAvailable,
-  totalUsd,
-  rate,
-  updatedLabel = 'BCV en vivo',
-}: CurrencyHeroProps) {
-  const rateLabel = rate ? formatRate(rate) : '—';
+export function CurrencyHero({ wallets, rate, updatedLabel = 'BCV en vivo' }: CurrencyHeroProps) {
+  const cells = CURRENCY_ORDER.map((currency) => {
+    const w = wallets.find((x) => x.currency === currency);
+    return {
+      currency,
+      available: Number(w?.available ?? 0),
+      balance: Number(w?.balance ?? 0),
+    };
+  });
 
   return (
-    <GraphiteCard className="grid grid-cols-1 divide-y divide-[var(--color-graphite-rule)] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:divide-x sm:divide-y-0">
-      <Balance
-        label="Saldo disponible · USD"
-        value={formatMoney(usdAvailable, 'USD')}
-        note={`de ${formatMoney(totalUsd, 'USD')} total en cartera`}
-      />
-
-      <div className="flex items-center justify-center gap-3 px-[var(--space-md)] py-[var(--space-sm)] sm:flex-col sm:gap-2">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-graphite-rule)] bg-[var(--color-graphite-2)] text-[var(--color-on-graphite-2)]">
-          <ArrowLeftRight size={15} />
-        </span>
-        <div className="text-center">
-          <div className="num text-[length:var(--text-md)] font-medium leading-none text-[var(--color-on-graphite)]">
-            {rateLabel}
-          </div>
-          <div className="mt-1 flex items-center justify-center gap-1.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-on-graphite-3)]">
-            <span
-              className="size-1.5 rounded-full bg-[var(--color-accent-on-graphite)]"
-              aria-hidden
-            />
-            {updatedLabel}
-          </div>
-        </div>
+    <GraphiteCard>
+      <div className="grid grid-cols-1 divide-y divide-[var(--color-graphite-rule)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        {cells.map((c) => (
+          <Balance
+            key={c.currency}
+            label={`Saldo disponible · ${c.currency}`}
+            value={formatMoney(c.available, c.currency)}
+            note={`de ${formatMoney(c.balance, c.currency)} total en cartera`}
+          />
+        ))}
       </div>
-
-      <Balance
-        label="Saldo disponible · VES"
-        value={formatMoney(vesAvailable, 'VES')}
-        note={`≈ ${formatMoney(rate ? vesAvailable / rate : 0, 'USD')}`}
-        align="sm:text-right sm:items-end"
-      />
+      <div className="flex items-center justify-center gap-2.5 border-t border-[var(--color-graphite-rule)] px-[var(--space-md)] py-2.5">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-xs)] border border-[var(--color-graphite-rule)] bg-[var(--color-graphite-2)] text-[var(--color-on-graphite-2)]">
+          <ArrowLeftRight size={12} />
+        </span>
+        <span className="num text-[length:var(--text-sm)] font-medium text-[var(--color-on-graphite)]">
+          1 USD = {rate ? formatRate(rate) : '—'} Bs
+        </span>
+        <span className="flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-on-graphite-3)]">
+          <span className="size-1.5 rounded-full bg-[var(--color-accent-on-graphite)]" aria-hidden />
+          {updatedLabel} · referencial — los saldos no se convierten
+        </span>
+      </div>
     </GraphiteCard>
   );
 }
 
-function Balance({
-  label,
-  value,
-  note,
-  align = '',
-}: {
-  label: string;
-  value: string;
-  note: string;
-  align?: string;
-}) {
+function Balance({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <div className={`flex min-w-0 flex-col justify-center p-[var(--space-md)] ${align}`}>
+    <div className="flex min-w-0 flex-col justify-center p-[var(--space-md)]">
       <div className="font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-on-graphite-3)]">
         {label}
       </div>
@@ -85,4 +70,3 @@ function Balance({
     </div>
   );
 }
-

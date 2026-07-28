@@ -310,6 +310,7 @@ export default function TransactionsPage() {
                 <option value="">Todas las monedas</option>
                 <option value="USD">USD</option>
                 <option value="VES">VES</option>
+                <option value="USDT">USDT</option>
               </Select>
               <Input
                 type="date"

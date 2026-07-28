@@ -282,6 +282,7 @@ export default function AdminGatewaysPage() {
               >
                 <option value="VES">VES</option>
                 <option value="USD">USD</option>
+                <option value="USDT">USDT</option>
               </Select>
             </Field>
             <Field label="Entorno">

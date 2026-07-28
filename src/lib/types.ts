@@ -1,4 +1,5 @@
-export type Currency = 'USD' | 'VES';
+/** Settlement assets: each has its own ledger — received, held and withdrawn as-is. */
+export type Currency = 'USD' | 'VES' | 'USDT';
 export type Environment = 'TEST' | 'LIVE';
 export type Role = 'MERCHANT' | 'ADMIN' | 'OPERATIONS';
 export type PayoutMode = 'INSTANT' | 'MANUAL';
@@ -56,8 +57,12 @@ export interface Transaction {
   refundedAmount?: string | null;
   settleStatus?: SettleStatus | null;
   afterRetentionDate?: string | null;
+  reserveAmount?: string | null;
+  reserveReleaseAt?: string | null;
+  reserveReleasedAt?: string | null;
   expiresAt?: string | null;
   provider?: string | null;
+  method?: PaymentMethod | null;
   order?: string | null;
 }
 
@@ -132,6 +137,65 @@ export interface ExchangeRate {
   rate: string;
   source: string;
   createdAt: string;
+}
+
+// ---- Double-entry ledger (Movimientos) ----
+
+export type LedgerAccount = 'MERCHANT_FUNDS' | 'CONSI_LIQUIDITY' | 'FEE_REVENUE' | 'TAX_PAYABLE';
+export type EntryDirection = 'DEBIT' | 'CREDIT';
+
+export interface LedgerEntry {
+  id: string;
+  journalId: string;
+  event: string;
+  account: LedgerAccount;
+  direction: EntryDirection;
+  currency: Currency;
+  amount: string;
+  memo: string | null;
+  transactionId: string | null;
+  createdAt: string;
+}
+
+// ---- Explicit FX (quote → accept) ----
+
+export interface FxQuote {
+  id: string;
+  fromCurrency: Currency;
+  toCurrency: Currency;
+  amountFrom: string;
+  amountTo: string;
+  baseRate: string;
+  rate: string;
+  spreadPct: string;
+  status: 'PENDING' | 'ACCEPTED' | 'EXPIRED';
+  expiresAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
+/** Fee/net preview for a payout, returned by POST /transactions/payout/quote. */
+export interface PayoutQuote {
+  currency: Currency;
+  amount: string;
+  fee: string;
+  tax: string;
+  net: string;
+  requiresApproval: boolean;
+  payoutMode: PayoutMode;
+}
+
+export type DispersionMode = 'IMMEDIATE' | 'DAILY_CUT';
+
+/** Admin-managed risk & payout policy of a merchant. */
+export interface MerchantPolicy {
+  retentionDays: number;
+  rollingReservePercent: string;
+  reserveDays: number;
+  payoutApprovalThresholdUsd: string;
+  payoutDailyLimitUsd: string;
+  dispersionMode: DispersionMode;
+  autoSettle: boolean;
 }
 
 export type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFER' | 'USDT' | 'CARD' | 'OTP_DEBIT' | 'C2P' | 'ZELLE';
@@ -247,12 +311,11 @@ export interface AdminMerchantUser {
   createdAt: string;
 }
 
-export interface AdminMerchantDetail {
+export interface AdminMerchantDetail extends MerchantPolicy {
   id: string;
   businessName: string;
   email: string;
   environment: Environment;
-  retentionDays: number;
   createdAt: string;
   wallets: Wallet[];
   merchantGateways: MerchantGatewayLink[];

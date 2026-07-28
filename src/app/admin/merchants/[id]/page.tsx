@@ -133,6 +133,8 @@ export default function AdminMerchantDetailPage() {
         ))}
       </div>
 
+      <RiskPolicyCard merchant={merchant} onSaved={setMerchant} />
+
       <GatewayEnablement merchant={merchant} onSaved={setMerchant} />
 
       <Card className="p-[var(--space-md)]">
@@ -165,6 +167,131 @@ export default function AdminMerchantDetailPage() {
         />
       </Card>
     </div>
+  );
+}
+
+/**
+ * Risk & payout policy: retention, rolling reserve, maker-checker threshold,
+ * daily cap and dispersion cadence. Thresholds are USD-equivalent so one knob
+ * covers USD, VES and USDT alike.
+ */
+function RiskPolicyCard({
+  merchant,
+  onSaved,
+}: {
+  merchant: AdminMerchantDetail;
+  onSaved: (m: AdminMerchantDetail) => void;
+}) {
+  const [form, setForm] = useState({
+    retentionDays: String(merchant.retentionDays),
+    reservePct: (Number(merchant.rollingReservePercent) * 100).toFixed(2),
+    reserveDays: String(merchant.reserveDays),
+    approvalUsd: merchant.payoutApprovalThresholdUsd,
+    dailyLimitUsd: merchant.payoutDailyLimitUsd,
+    dispersionMode: merchant.dispersionMode,
+  });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setMsg(null);
+    try {
+      const updated = await api.adminUpdateMerchantPolicy(merchant.id, {
+        retentionDays: Number(form.retentionDays),
+        rollingReservePercent: (Number(form.reservePct) / 100).toFixed(4),
+        reserveDays: Number(form.reserveDays),
+        payoutApprovalThresholdUsd: Number(form.approvalUsd).toFixed(2),
+        payoutDailyLimitUsd: Number(form.dailyLimitUsd).toFixed(2),
+        dispersionMode: form.dispersionMode,
+      });
+      onSaved({ ...merchant, ...updated });
+      setMsg({ kind: 'ok', text: 'Política actualizada.' });
+      setTimeout(() => setMsg(null), 3000);
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Error al guardar' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const field = (
+    id: string,
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    hint?: string,
+  ) => (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
+        {label}
+      </label>
+      <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} className="num" />
+      {hint ? <p className="text-[length:var(--text-2xs)] text-[var(--color-ink-4)]">{hint}</p> : null}
+    </div>
+  );
+
+  return (
+    <Card className="p-[var(--space-md)]">
+      <h2 className="text-[length:var(--text-md)]">Política de riesgo y retiros</h2>
+      <p className="mb-[var(--space-sm)] mt-1 text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+        Umbrales en USD equivalentes: aplican por igual a USD, VES y USDT.
+      </p>
+      <form onSubmit={save} className="flex flex-col gap-[var(--space-sm)]">
+        <div className="grid gap-[var(--space-sm)] sm:grid-cols-3">
+          {field('pol-ret', 'Retención (días)', form.retentionDays, (v) =>
+            setForm((f) => ({ ...f, retentionDays: v })),
+          )}
+          {field(
+            'pol-res',
+            'Reserva rodante (%)',
+            form.reservePct,
+            (v) => setForm((f) => ({ ...f, reservePct: v })),
+            'Fracción de cada cobro retenida como garantía',
+          )}
+          {field('pol-resd', 'Días de reserva', form.reserveDays, (v) =>
+            setForm((f) => ({ ...f, reserveDays: v })),
+          )}
+          {field(
+            'pol-appr',
+            'Umbral de aprobación (USD)',
+            form.approvalUsd,
+            (v) => setForm((f) => ({ ...f, approvalUsd: v })),
+            'Retiros mayores requieren aprobación de un admin (0 = off)',
+          )}
+          {field(
+            'pol-limit',
+            'Límite diario (USD)',
+            form.dailyLimitUsd,
+            (v) => setForm((f) => ({ ...f, dailyLimitUsd: v })),
+            'Tope de retiros por día (0 = sin límite)',
+          )}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="pol-disp" className="text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
+              Dispersión automática
+            </label>
+            <select
+              id="pol-disp"
+              value={form.dispersionMode}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, dispersionMode: e.target.value as typeof f.dispersionMode }))
+              }
+              className="h-9 rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-surface)] px-2.5 text-[length:var(--text-sm)] text-[var(--color-ink)]"
+            >
+              <option value="IMMEDIATE">Inmediata (al liberar fondos)</option>
+              <option value="DAILY_CUT">Corte diario (T+1, 01:00)</option>
+            </select>
+          </div>
+        </div>
+        {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
+        <div>
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar política'}
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 }
 

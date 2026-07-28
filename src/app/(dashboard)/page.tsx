@@ -79,14 +79,7 @@ export default function DashboardPage() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Error'));
   }, []);
 
-  const usd = wallets.find((w) => w.currency === 'USD');
-  const ves = wallets.find((w) => w.currency === 'VES');
   const usdVesRate = rate ? Number(rate.rate) : 0;
-
-  // Total available expressed in USD (VES converted at the live rate).
-  const totalUsd =
-    Number(usd?.available ?? 0) + (usdVesRate ? Number(ves?.available ?? 0) / usdVesRate : 0);
-
   const recent = transactions.slice(0, 4);
 
   return (
@@ -98,12 +91,7 @@ export default function DashboardPage() {
 
       {error ? <Notice kind="err">{error}</Notice> : null}
 
-      <CurrencyHero
-        usdAvailable={Number(usd?.available ?? 0)}
-        vesAvailable={Number(ves?.available ?? 0)}
-        totalUsd={totalUsd}
-        rate={usdVesRate}
-      />
+      <CurrencyHero wallets={wallets} rate={usdVesRate} />
 
       {/* Payment links are the headline capability — a typographic row, not a
           gradient promo card. The CTA names the destination. */}
