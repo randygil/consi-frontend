@@ -1,4 +1,15 @@
-import type { Currency, TransactionStatus, TransactionType } from './types';
+import type { Currency, Role, TransactionStatus, TransactionType } from './types';
+
+const ROLE_LABELS: Record<Role, string> = {
+  MERCHANT: 'Comercio',
+  ADMIN: 'Administrador',
+  OPERATIONS: 'Operaciones',
+};
+
+/** The enum is an implementation detail — never show `OPERATIONS` to a person. */
+export function roleLabel(role: Role): string {
+  return ROLE_LABELS[role];
+}
 
 const STATUS_LABELS: Record<TransactionStatus, string> = {
   COMPLETED: 'Completado',

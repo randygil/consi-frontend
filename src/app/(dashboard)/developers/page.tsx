@@ -14,14 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Notice, PageHead } from '@/components/ui/page-head';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Column, DataTable } from '@/components/ui/data-table';
 import { api } from '@/lib/api-client';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -75,6 +68,71 @@ const DELIVERY_LABEL: Record<string, string> = {
   DELIVERED: 'Entregado',
   FAILED: 'Fallido',
 };
+
+const DELIVERY_COLUMNS: Column<WebhookDelivery>[] = [
+  {
+    id: 'event',
+    header: 'Evento',
+    num: true,
+    align: 'left',
+    value: (d) => d.event,
+    cell: (d) => <span className="whitespace-nowrap text-[var(--color-ink)]">{d.event}</span>,
+  },
+  {
+    id: 'status',
+    header: 'Estado',
+    value: (d) => d.status,
+    text: (d) => DELIVERY_LABEL[d.status] ?? 'Pendiente',
+    cell: (d) => (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-xs)] px-1.5 py-0.5',
+          'font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)]',
+          DELIVERY_TONE[d.status] ?? 'text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
+        )}
+      >
+        <span className="size-1.5 rounded-full bg-current" aria-hidden />
+        {DELIVERY_LABEL[d.status] ?? 'Pendiente'}
+      </span>
+    ),
+  },
+  {
+    id: 'attempts',
+    header: 'Intentos',
+    num: true,
+    value: (d) => d.attempts,
+    text: (d) => `${d.attempts}/${d.maxAttempts}`,
+    cell: (d) => (
+      <span className="whitespace-nowrap">
+        {d.attempts}/{d.maxAttempts}
+      </span>
+    ),
+  },
+  {
+    id: 'lastError',
+    header: 'Último error',
+    num: true,
+    align: 'left',
+    value: (d) => d.lastError ?? '',
+    cell: (d) => (
+      <span className="block max-w-xs truncate text-[length:var(--text-2xs)] text-[var(--color-ink-3)]">
+        {d.lastError ?? '—'}
+      </span>
+    ),
+  },
+  {
+    id: 'createdAt',
+    header: 'Fecha',
+    num: true,
+    value: (d) => d.createdAt,
+    text: (d) => formatDate(d.createdAt),
+    cell: (d) => (
+      <span className="whitespace-nowrap text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+        {formatDate(d.createdAt)}
+      </span>
+    ),
+  },
+];
 
 export default function DevelopersPage() {
   const [keys, setKeys] = useState<ApiKeys | null>(null);
@@ -209,56 +267,17 @@ export default function DevelopersPage() {
           </p>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Evento</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Intentos</TableHead>
-                <TableHead>Último error</TableHead>
-                <TableHead>Fecha</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deliveries.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-[var(--space-md)] text-center">
-                    <span className="label">Sin notificaciones enviadas aún</span>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                deliveries.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell className="num whitespace-nowrap text-[var(--color-ink)]">
-                      {d.event}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] px-1.5 py-0.5',
-                          'font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)]',
-                          DELIVERY_TONE[d.status] ??
-                            'text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
-                        )}
-                      >
-                        <span className="size-1.5 rounded-full bg-current" aria-hidden />
-                        {DELIVERY_LABEL[d.status] ?? 'Pendiente'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="num whitespace-nowrap">
-                      {d.attempts}/{d.maxAttempts}
-                    </TableCell>
-                    <TableCell className="num max-w-xs truncate text-[length:var(--text-2xs)] text-[var(--color-ink-3)]">
-                      {d.lastError ?? '—'}
-                    </TableCell>
-                    <TableCell className="num whitespace-nowrap text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
-                      {formatDate(d.createdAt)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <DataTable
+            id="webhook-deliveries"
+            caption="Entregas de webhook"
+            columns={DELIVERY_COLUMNS}
+            rows={deliveries}
+            rowKey={(d) => d.id}
+            empty="Sin notificaciones enviadas aún."
+            searchPlaceholder="Buscar por evento o error…"
+            defaultSort={{ id: 'createdAt', dir: 'desc' }}
+            exportFilename="webhooks_consi"
+          />
         </CardContent>
       </Card>
 

@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Column, DataTable } from '@/components/ui/data-table';
 import { Notice, PageHead } from '@/components/ui/page-head';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { DEFAULT_METHODS, METHOD_CATEGORIES } from '@/lib/payment-methods';
 import type { Currency, PaymentLinkSummary, PaymentMethod } from '@/lib/types';
@@ -35,8 +35,60 @@ const chip = (on: boolean) =>
       : 'border-[var(--color-rule)] text-[var(--color-ink-3)] hover:border-[var(--color-rule-2)] hover:text-[var(--color-ink)]',
   );
 
+const LINK_COLUMNS: Column<PaymentLinkSummary>[] = [
+  {
+    id: 'description',
+    header: 'Descripción',
+    value: (l) => l.description ?? '',
+    cell: (l) => <span className="text-[var(--color-ink)]">{l.description ?? '—'}</span>,
+  },
+  { id: 'currency', header: 'Moneda', num: true, align: 'left', value: (l) => l.currency },
+  {
+    id: 'amount',
+    header: 'Monto',
+    num: true,
+    value: (l) => Number(l.amount),
+    text: (l) => formatMoney(l.amount, l.currency),
+    cell: (l) => <span className="text-[var(--color-ink)]">{formatMoney(l.amount, l.currency)}</span>,
+  },
+  {
+    id: 'status',
+    header: 'Estado',
+    value: (l) => l.status,
+    text: (l) => LINK_STATUS_LABEL[l.status] ?? l.status,
+    cell: (l) => <LinkStatusBadge status={l.status} />,
+  },
+  {
+    id: 'createdAt',
+    header: 'Creado',
+    num: true,
+    defaultHidden: true,
+    value: (l) => l.createdAt,
+    text: (l) => formatDate(l.createdAt),
+  },
+  {
+    id: 'token',
+    header: 'Token',
+    num: true,
+    align: 'left',
+    defaultHidden: true,
+    value: (l) => l.token,
+  },
+  {
+    id: 'link',
+    header: 'Link',
+    align: 'right',
+    pinned: true,
+    sortable: false,
+    searchable: false,
+    exportable: false,
+    cell: (l) => <LinkActions url={l.url} />,
+  },
+];
+
 export default function LinksPage() {
   const [links, setLinks] = useState<PaymentLinkSummary[]>([]);
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD');
@@ -45,7 +97,12 @@ export default function LinksPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = () => api.getPaymentLinks().then(setLinks).catch(() => setLinks([]));
+  const load = () =>
+    api
+      .getPaymentLinks()
+      .then(setLinks)
+      .catch(() => setLinks([]))
+      .finally(() => setLoading(false));
   useEffect(() => {
     load();
   }, []);
@@ -217,40 +274,18 @@ export default function LinksPage() {
       )}
 
       <Card className="p-[var(--space-md)]">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Descripción</TableHead>
-              <TableHead className="text-right">Monto</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Link</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {links.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
-                  Aún no has creado links de pago.
-                </TableCell>
-              </TableRow>
-            ) : (
-              links.map((l) => (
-                <TableRow key={l.token}>
-                  <TableCell className="text-[var(--color-ink)]">{l.description ?? '—'}</TableCell>
-                  <TableCell className="num text-right text-[var(--color-ink)]">
-                    {formatMoney(l.amount, l.currency)}
-                  </TableCell>
-                  <TableCell>
-                    <LinkStatusBadge status={l.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <LinkActions url={l.url} />
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        <DataTable
+          id="payment-links"
+          caption="Links de pago"
+          columns={LINK_COLUMNS}
+          rows={links}
+          rowKey={(l) => l.token}
+          loading={loading}
+          empty="Aún no has creado links de pago."
+          searchPlaceholder="Buscar por descripción o referencia…"
+          defaultSort={{ id: 'createdAt', dir: 'desc' }}
+          exportFilename="links_consi"
+        />
       </Card>
     </div>
   );

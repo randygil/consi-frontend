@@ -3,11 +3,59 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Column, DataTable } from '@/components/ui/data-table';
 import { Notice, PageHead } from '@/components/ui/page-head';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Transaction } from '@/lib/types';
+
+/** Net is what actually lands, so it is the figure this table ranks and exports. */
+const net = (t: Transaction) => Number(t.netAmount ?? t.amount);
+
+const COLUMNS: Column<Transaction>[] = [
+  {
+    id: 'reference',
+    header: 'Referencia',
+    num: true,
+    align: 'left',
+    value: (t) => t.reference,
+    cell: (t) => (
+      <span className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+        {t.reference.slice(0, 14)}
+      </span>
+    ),
+  },
+  {
+    id: 'currency',
+    header: 'Moneda',
+    num: true,
+    align: 'left',
+    value: (t) => t.currency,
+    cell: (t) => <span className="text-[var(--color-ink-3)]">{t.currency}</span>,
+  },
+  {
+    id: 'net',
+    header: 'Neto',
+    num: true,
+    value: net,
+    text: (t) => formatMoney(net(t), t.currency),
+    cell: (t) => (
+      <span className="text-[var(--color-ink)]">{formatMoney(net(t), t.currency)}</span>
+    ),
+  },
+  {
+    id: 'afterRetentionDate',
+    header: 'Se libera',
+    num: true,
+    value: (t) => t.afterRetentionDate ?? '',
+    text: (t) => (t.afterRetentionDate ? formatDate(t.afterRetentionDate) : '—'),
+    cell: (t) => (
+      <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+        {t.afterRetentionDate ? formatDate(t.afterRetentionDate) : '—'}
+      </span>
+    ),
+  },
+];
 
 export default function SettlementsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
@@ -103,42 +151,17 @@ export default function SettlementsPage() {
               {heldTotal} {heldTotal === 1 ? 'retención' : 'retenciones'}
             </span>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Referencia</TableHead>
-                <TableHead>Moneda</TableHead>
-                <TableHead className="text-right">Neto</TableHead>
-                <TableHead className="text-right">Se libera</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
-                    No hay fondos retenidos.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="num text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
-                      {t.reference.slice(0, 14)}
-                    </TableCell>
-                    <TableCell className="num text-[var(--color-ink-3)]">{t.currency}</TableCell>
-                    <TableCell className="num text-right text-[var(--color-ink)]">
-                      {t.netAmount
-                        ? formatMoney(t.netAmount, t.currency)
-                        : formatMoney(t.amount, t.currency)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-                      {t.afterRetentionDate ? formatDate(t.afterRetentionDate) : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <DataTable
+            id="settlements"
+            caption="Fondos pendientes de liberación"
+            columns={COLUMNS}
+            rows={rows}
+            rowKey={(t) => t.id}
+            empty="No hay fondos retenidos."
+            searchPlaceholder="Buscar por referencia…"
+            defaultSort={{ id: 'afterRetentionDate', dir: 'asc' }}
+            exportFilename="retenciones_consi"
+          />
         </Card>
 
         <Card>

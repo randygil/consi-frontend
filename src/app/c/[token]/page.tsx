@@ -1,21 +1,38 @@
 'use client';
 
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4
+ * genre: modern-minimal · theme: Cobalt (light + dark) · design-system: design.md
+ * designed-as-app · macrostructure: 04 Stat-Led (focused family)
+ * nav: none (hosted payer surface) · footer: Ft2 inline single line
+ * enrichment: none — typography only · motion: reveal-off, state-only
+ * contrast: verified light + dark · graphite: unused (reserved per design.md)
+ */
+
 import {
+  ArrowLeft,
+  ArrowRight,
   Building2,
-  CheckCircle2,
   Coins,
-  Copy,
   CreditCard,
   DollarSign,
-  Loader2,
   Lock,
   Smartphone,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
+import QRCode from 'qrcode';
 import { useCallback, useEffect, useState } from 'react';
 import { CardDropIn } from '@/components/CardDropIn';
+import { Stepper } from '@/components/admin/stepper';
+import { CopyButton } from '@/components/developers/copy-button';
+import { StatusBadge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Notice } from '@/components/ui/page-head';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { checkoutApi } from '@/lib/checkout-client';
 import { formatMoney } from '@/lib/format';
+import { PAYMENT_METHODS } from '@/lib/payment-methods';
 import type {
   CheckoutData,
   Currency,
@@ -23,6 +40,9 @@ import type {
   PaymentInstructions,
   PaymentMethod,
 } from '@/lib/types';
+
+// Test shortcuts are a local convenience — they must never reach a build.
+const DEV = process.env.NODE_ENV === 'development';
 
 type CustomerForm = { firstName: string; lastName: string; email: string; cedula: string };
 
@@ -55,16 +75,24 @@ function resolveCustomer(
 }
 
 const METHOD_ICON: Record<PaymentMethod, React.ReactNode> = {
-  PAGO_MOVIL: <Smartphone size={20} />,
-  TRANSFER: <Building2 size={20} />,
-  USDT: <Coins size={20} />,
-  CARD: <CreditCard size={20} />,
-  OTP_DEBIT: <Lock size={20} />,
-  C2P: <Lock size={20} />,
-  ZELLE: <DollarSign size={20} />,
+  PAGO_MOVIL: <Smartphone size={16} />,
+  TRANSFER: <Building2 size={16} />,
+  USDT: <Coins size={16} />,
+  CARD: <CreditCard size={16} />,
+  OTP_DEBIT: <Lock size={16} />,
+  C2P: <Lock size={16} />,
+  ZELLE: <DollarSign size={16} />,
 };
 
+/** One-line disambiguation per rail, from the local catalog — real copy, not invented. */
+const METHOD_TAGLINE: Partial<Record<PaymentMethod, string>> = Object.fromEntries(
+  PAYMENT_METHODS.map((m) => [m.key, m.tagline]),
+);
+
 type Step = 'method' | 'instructions' | 'done';
+
+const STEPS = ['Datos', 'Pago', 'Listo'];
+const STEP_INDEX: Record<Step, number> = { method: 0, instructions: 1, done: 2 };
 
 export default function CheckoutPage() {
   const token = String(useParams().token);
@@ -76,6 +104,8 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
+  // Which rail is mid-request, so only that row reads "Creando…" rather than all of them.
+  const [pending, setPending] = useState<PaymentMethod | null>(null);
   const [show3ds, setShow3ds] = useState(false);
   const [loading3ds, setLoading3ds] = useState(false);
   const [customer, setCustomer] = useState<CustomerForm>({
@@ -121,7 +151,9 @@ export default function CheckoutPage() {
         // persists in state and is sent at tokenize time.
         setInstructions({
           method: 'CARD',
-          label: 'Tarjeta de Crédito',
+          // Carry the label the payer just clicked, so the step head doesn't rename
+          // the rail mid-flow ("Tarjeta de crédito/débito" → "Tarjeta de Crédito").
+          label: data?.methods.find((x) => x.method === 'CARD')?.label ?? 'Tarjeta',
           note: 'Ingresa los datos de tu tarjeta para completar el pago de forma segura.',
           fields: [],
           interactive: true,
@@ -130,6 +162,7 @@ export default function CheckoutPage() {
         return;
       }
       setBusy(true);
+      setPending(m);
       setError(null);
       try {
         const res = await checkoutApi.pay(token, m, undefined, resolved.customer);
@@ -139,6 +172,7 @@ export default function CheckoutPage() {
         setError(e instanceof Error ? e.message : 'Error');
       } finally {
         setBusy(false);
+        setPending(null);
       }
     },
     [token, customer, data],
@@ -220,212 +254,385 @@ export default function CheckoutPage() {
     }
   }, [token, email]);
 
+  // Esc closes the 3DS challenge — same affordance as the command palette.
+  useEffect(() => {
+    if (!show3ds) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShow3ds(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [show3ds]);
+
   if (error && !data) {
     return (
-      <Shell>
-        <p className="text-center text-sm text-[var(--danger-600)]">{error}</p>
-      </Shell>
+      <Frame aside={<RailHead />}>
+        <Notice kind="err">{error}</Notice>
+      </Frame>
     );
   }
   if (!data) {
     return (
-      <Shell>
-        <div className="flex justify-center py-10">
-          <Loader2 className="animate-spin text-[var(--text-subtle)]" />
-        </div>
-      </Shell>
+      <Frame aside={<RailHead />}>
+        <p className="label">Cargando pago…</p>
+      </Frame>
     );
   }
 
-  return (
-    <Shell businessName={data.businessName}>
-      <AmountBlock data={data} />
+  // A dead link is a terminal state, not a form. The backend already refuses to
+  // charge one (checkout.service pay() → BadRequest), but without this the payer
+  // fills in name, email and cédula, picks a rail, and only THEN gets refused.
+  // PAID is deliberately not here: links are reusable, so a paid link stays payable.
+  if (data.status === 'EXPIRED' || data.status === 'CANCELLED') {
+    return (
+      <Frame aside={<OrderRail data={data} />}>
+        <DeadLinkView status={data.status} />
+      </Frame>
+    );
+  }
 
-      {step === 'method' && (
-        <div className="space-y-2.5">
-          <p className="text-[13px] font-semibold text-[var(--text-muted)]">
-            Tus datos{data.currency === 'VES' ? '' : ' (opcional)'}
-          </p>
-          <div className="grid grid-cols-2 gap-2.5">
-            <input
-              value={customer.firstName}
-              onChange={(e) => setCustomer({ ...customer, firstName: e.target.value })}
-              placeholder="Nombre"
-              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
-            />
-            <input
-              value={customer.lastName}
-              onChange={(e) => setCustomer({ ...customer, lastName: e.target.value })}
-              placeholder="Apellido"
-              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
-            />
-          </div>
-          <input
-            type="email"
-            value={customer.email}
-            onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-            placeholder="Correo electrónico"
-            className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
-          />
-          {data.currency === 'VES' && (
-            <input
-              value={customer.cedula}
-              onChange={(e) => setCustomer({ ...customer, cedula: e.target.value })}
-              placeholder="Cédula / RIF (ej. V-12345678)"
-              className="w-full rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-3.5 py-2.5 text-sm text-[var(--text-strong)] outline-none focus:border-[var(--blue-400)]"
+  const errorNotice = error ? <Notice kind="err">{error}</Notice> : null;
+
+  return (
+    <>
+      <div inert={show3ds}>
+        <Frame aside={<OrderRail data={data} />}>
+          <Stepper steps={STEPS} current={STEP_INDEX[step]} />
+
+          {step === 'method' && (
+            <div className="mt-[var(--space-lg)] flex flex-col gap-[var(--space-lg)]">
+              <section>
+                <h2 className="text-[length:var(--text-md)]">Tus datos</h2>
+                <p className="mt-1 max-w-[52ch] text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                  {data.currency === 'VES'
+                    ? 'Los bancos venezolanos exigen tu identidad para conciliar el pago.'
+                    : 'Opcional. Sólo lo usamos para enviarte el comprobante.'}
+                </p>
+
+                <div className="mt-[var(--space-sm)] flex flex-col gap-[var(--space-sm)]">
+                  <div className="grid grid-cols-1 gap-[var(--space-sm)] min-[360px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="firstName">Nombre</Label>
+                      <Input
+                        id="firstName"
+                        autoComplete="given-name"
+                        value={customer.firstName}
+                        onChange={(e) => setCustomer({ ...customer, firstName: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="lastName">Apellido</Label>
+                      <Input
+                        id="lastName"
+                        autoComplete="family-name"
+                        value={customer.lastName}
+                        onChange={(e) => setCustomer({ ...customer, lastName: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="email">Correo electrónico</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      value={customer.email}
+                      onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+                    />
+                  </div>
+                  {data.currency === 'VES' && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="cedula">Cédula / RIF</Label>
+                      <Input
+                        id="cedula"
+                        placeholder="V-12345678"
+                        className="font-[family-name:var(--font-mono)]"
+                        value={customer.cedula}
+                        onChange={(e) => setCustomer({ ...customer, cedula: e.target.value })}
+                      />
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section>
+                <h2 className="text-[length:var(--text-md)]">Elige cómo pagar</h2>
+                <p className="mt-1 max-w-[52ch] text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                  {data.methods.length} vía{data.methods.length === 1 ? '' : 's'} habilitada
+                  {data.methods.length === 1 ? '' : 's'} por el comercio.
+                </p>
+
+                <ul className="mt-[var(--space-sm)] border-y border-[var(--color-rule)]">
+                  {data.methods.map((m) => (
+                    <li key={m.method} className="border-b border-[var(--color-rule)] last:border-b-0">
+                      <MethodRow
+                        method={m.method}
+                        label={m.label}
+                        disabled={busy}
+                        pending={pending === m.method}
+                        onSelect={() => choose(m.method)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              {errorNotice}
+            </div>
+          )}
+
+          {step === 'instructions' && instructions && (
+            <InstructionsView
+              token={token}
+              instructions={instructions}
+              busy={busy}
+              errorNotice={errorNotice}
+              reference={reference}
+              onReferenceChange={setReference}
+              phone={phone}
+              onPhoneChange={setPhone}
+              email={email}
+              onEmailChange={setEmail}
+              onConfirm={confirm}
+              onConfirmByPhone={confirmByPhone}
+              onConfirmByEmail={confirmByEmail}
+              onPaid={() => setStep('done')}
+              onBack={() => {
+                setReference('');
+                setPhone('');
+                setEmail('');
+                setError(null);
+                setStep('method');
+              }}
+              onTokenizeSuccess={onTokenizeSuccess}
+              setError={setError}
             />
           )}
-          <p className="pt-1 text-[13px] font-semibold text-[var(--text-muted)]">
-            Elige cómo pagar
-          </p>
-          {data.methods.map((m) => (
-            <button
-              key={m.method}
-              type="button"
-              disabled={busy}
-              onClick={() => choose(m.method)}
-              className="flex w-full items-center gap-3 rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white px-4 py-3.5 text-left transition-all hover:border-[var(--blue-400)] hover:shadow-[var(--shadow-sm)] disabled:opacity-50"
-            >
-              <span className="flex size-9 items-center justify-center rounded-[10px] bg-[var(--blue-100)] text-[var(--blue-700)]">
-                {METHOD_ICON[m.method]}
-              </span>
-              <span className="flex-1 font-semibold text-[var(--text-strong)]">{m.label}</span>
-              {busy ? <Loader2 size={16} className="animate-spin text-[var(--text-subtle)]" /> : null}
-            </button>
-          ))}
-        </div>
-      )}
 
-      {step === 'instructions' && instructions && (
-        <InstructionsView
-          token={token}
-          instructions={instructions}
-          busy={busy}
-          reference={reference}
-          onReferenceChange={setReference}
-          phone={phone}
-          onPhoneChange={setPhone}
-          email={email}
-          onEmailChange={setEmail}
-          onConfirm={confirm}
-          onConfirmByPhone={confirmByPhone}
-          onConfirmByEmail={confirmByEmail}
-          onPaid={() => setStep('done')}
-          onBack={() => {
-            setReference('');
-            setPhone('');
-            setEmail('');
-            setError(null);
-            setStep('method');
-          }}
-          onTokenizeSuccess={onTokenizeSuccess}
-          setError={setError}
-        />
-      )}
+          {step === 'done' && <DoneView data={data} />}
+        </Frame>
+      </div>
 
-      {step === 'done' && <DoneView successUrl={data.successUrl} />}
-
-      {error && data ? (
-        <p className="text-center text-xs text-[var(--danger-600)]">{error}</p>
-      ) : null}
-
-      {/* Simulated 3D Secure 2.0 Challenge Modal */}
+      {/* Simulated 3D Secure 2.0 challenge. The page behind it is `inert`, so Tab
+        * can't escape the dialog and no focus trap is needed. */}
       {show3ds && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-sm rounded-[var(--radius-lg)] bg-white p-6 shadow-2xl border border-[var(--ink-100)] text-center space-y-4">
-            <span className="flex size-14 items-center justify-center rounded-full bg-[var(--blue-50)] text-[var(--blue-700)] mx-auto">
-              <Smartphone size={28} className="animate-bounce" />
-            </span>
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[var(--text-strong)]">Autenticación 3D Secure 2.0</h3>
-              <p className="text-xs text-[var(--text-muted)]">
-                Para tu seguridad, autoriza esta transacción presionando el botón de abajo (simulación de biometría/app del banco).
-              </p>
-            </div>
-            
-            <div className="border border-[var(--ink-100)] rounded-[var(--radius-md)] p-3 bg-[var(--ink-50)] text-xs font-semibold text-[var(--text-body)] font-mono">
-              Comercio: {data.businessName} <br />
-              Monto: {formatMoney(data.amount, data.currency)}
-            </div>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--color-scrim)] p-[var(--space-sm)] min-[480px]:items-center">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tds-title"
+            className="w-full max-w-[26rem] rounded-[var(--radius-md)] border border-[var(--color-rule)] bg-[var(--color-surface)] p-[var(--space-md)]"
+          >
+            <p className="label">3-D Secure 2.0</p>
+            <h2 id="tds-title" className="mt-1 text-[length:var(--text-md)]">
+              Autoriza el cargo
+            </h2>
+            <p className="mt-1.5 text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+              Tu banco pide una autorización adicional. Confirma abajo para completar el pago
+              (simulación de biometría).
+            </p>
 
-            <button
-              type="button"
-              disabled={loading3ds}
-              onClick={async () => {
-                setLoading3ds(true);
-                try {
-                  const res = await checkoutApi.confirm3ds(token);
-                  if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
-                    setShow3ds(false);
-                    setStep('done');
-                  } else {
-                    setError('Autenticación 3DS fallida. Intenta nuevamente.');
+            <dl className="mt-[var(--space-sm)] border-y border-[var(--color-rule)]">
+              <LedgerRow label="Comercio" value={data.businessName} />
+              <LedgerRow label="Monto" value={formatMoney(data.amount, data.currency)} num />
+            </dl>
+
+            {errorNotice ? <div className="mt-[var(--space-sm)]">{errorNotice}</div> : null}
+
+            <div className="mt-[var(--space-md)] flex flex-col gap-[var(--space-2xs)]">
+              <Button
+                type="button"
+                size="lg"
+                autoFocus
+                disabled={loading3ds}
+                onClick={async () => {
+                  setLoading3ds(true);
+                  setError(null);
+                  try {
+                    const res = await checkoutApi.confirm3ds(token);
+                    if (res.status === 'PAID' || res.transactionStatus === 'COMPLETED') {
+                      setShow3ds(false);
+                      setStep('done');
+                    } else {
+                      setError('No pudimos autorizar el cargo. Intenta de nuevo.');
+                    }
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Error en la autorización 3-D Secure');
+                  } finally {
+                    setLoading3ds(false);
                   }
-                } catch (e: any) {
-                  setError(e.message || 'Error en autenticación 3DS');
-                } finally {
-                  setLoading3ds(false);
-                }
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
-              style={{ background: 'var(--gradient-brand)' }}
-            >
-              {loading3ds ? <Loader2 size={16} className="animate-spin" /> : null}
-              Confirmar Autenticación
-            </button>
-            <button
-              type="button"
-              onClick={() => setShow3ds(false)}
-              className="w-full text-center text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-            >
-              Cancelar
-            </button>
+                }}
+              >
+                {loading3ds ? 'Autorizando…' : 'Autorizar pago'}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setShow3ds(false)}>
+                Cancelar
+              </Button>
+            </div>
           </div>
         </div>
       )}
-    </Shell>
+    </>
   );
 }
 
-function Shell({ children, businessName }: { children: React.ReactNode; businessName?: string }) {
+/* ---------------------------------------------------------------------------
+ * Frame — the two-tone split.
+ *
+ * Order rail on paper, act column on surface, one hairline seam between them.
+ * Both halves are 1fr and their content hugs the seam, so the pair reads centred
+ * on a wide screen without a floating card. Below 880px it stacks: the rail
+ * becomes a header band and the act column runs full width.
+ * ------------------------------------------------------------------------- */
+function Frame({ aside, children }: { aside: React.ReactNode; children: React.ReactNode }) {
   return (
-    <main
-      className="flex min-h-screen items-center justify-center p-4"
-      style={{ background: 'var(--gradient-mesh)' }}
-    >
-      <div className="w-full max-w-[420px] rounded-[var(--radius-xl)] bg-white p-7 shadow-[var(--shadow-lg)]">
-        <div className="mb-5 flex items-center justify-between">
-          <span className="text-[15px] font-extrabold tracking-tight text-[var(--text-strong)]">
-            {businessName ?? 'Consi'}
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--ink-50)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--text-muted)]">
-            <Lock size={11} /> Pago seguro
-          </span>
+    <main className="min-h-screen min-[880px]:grid min-[880px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <aside className="border-b border-[var(--color-rule)] bg-[var(--color-paper)] px-[var(--space-md)] py-[var(--space-lg)] min-[880px]:border-b-0 min-[880px]:border-r min-[880px]:py-[var(--space-2xl)]">
+        <div className="min-[880px]:sticky min-[880px]:top-[var(--space-2xl)] min-[880px]:ml-auto min-[880px]:mr-[var(--space-xl)] min-[880px]:max-w-[24rem]">
+          {aside}
         </div>
-        <div className="space-y-5">{children}</div>
-        <p className="mt-6 text-center text-[11px] text-[var(--text-subtle)]">
-          Procesado por <span className="font-bold">Consi</span> · Pasarela de pagos
-        </p>
-      </div>
+      </aside>
+      <section className="bg-[var(--color-surface)] px-[var(--space-md)] py-[var(--space-lg)] min-[880px]:py-[var(--space-2xl)]">
+        <div className="min-[880px]:ml-[var(--space-xl)] min-[880px]:max-w-[28rem]">{children}</div>
+      </section>
     </main>
   );
 }
 
-function AmountBlock({ data }: { data: CheckoutData }) {
+/** Wordmark + theme control. Same construction as /login — the focused family's head. */
+function RailHead() {
   return (
-    <div className="rounded-[var(--radius-lg)] bg-[var(--ink-50)] p-5 text-center">
-      <div className="font-mono text-[34px] font-bold leading-none text-[var(--text-strong)]">
-        {formatMoney(data.amount, data.currency)}
+    <div className="flex items-center justify-between gap-[var(--space-sm)]">
+      <div className="flex items-center gap-2">
+        <span className="size-3 rounded-[2px] bg-[var(--color-accent)]" aria-hidden />
+        <span className="font-[family-name:var(--font-display)] text-[length:var(--text-md)] font-semibold tracking-[var(--tracking-display)] text-[var(--color-ink)]">
+          Consi
+        </span>
       </div>
-      {data.currency !== 'USD' ? (
-        <div className="mt-1.5 text-[13px] text-[var(--text-muted)]">
-          ≈ {formatMoney(data.usdEquivalent, 'USD')}
-        </div>
-      ) : null}
-      {data.description ? (
-        <div className="mt-2 text-[13px] font-medium text-[var(--text-body)]">{data.description}</div>
-      ) : null}
+      <ThemeToggle />
     </div>
+  );
+}
+
+/**
+ * Stat-Led hero. The amount is the largest element on the page and it is paired
+ * with the words that complete it ("Pagar a <comercio>"), read as one sentence.
+ * No graphite here — design.md reserves that beat for the dashboard readout and
+ * code cards, and a second dark surface would dilute it into decoration.
+ */
+function OrderRail({ data }: { data: CheckoutData }) {
+  // The ledger already closes on a rule, so the trust block only draws its own
+  // when there is no ledger above it — two rules 24px apart read as a mistake.
+  const hasLedger = Boolean(data.description || data.reference);
+  return (
+    <div className="flex flex-col gap-[var(--space-lg)]">
+      <RailHead />
+
+      <div>
+        <p className="label">Pagar a</p>
+        <h1 className="mt-1 text-[length:var(--text-lg)]">{data.businessName}</h1>
+
+        <p
+          className="num mt-[var(--space-sm)] font-medium leading-[1.05] tracking-[var(--tracking-display)] text-[var(--color-ink)] [font-size:clamp(1.75rem,7vw,3rem)] [overflow-wrap:anywhere]"
+          aria-label={`Monto a pagar: ${formatMoney(data.amount, data.currency)}`}
+        >
+          {formatMoney(data.amount, data.currency)}
+        </p>
+
+        {data.currency !== 'USD' ? (
+          <p className="mt-[var(--space-2xs)] text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+            Equivalente{' '}
+            <span className="num text-[var(--color-ink-2)]">
+              {formatMoney(data.usdEquivalent, 'USD')}
+            </span>
+          </p>
+        ) : null}
+      </div>
+
+      {hasLedger ? (
+        <dl className="border-y border-[var(--color-rule)]">
+          {data.description ? <LedgerRow label="Concepto" value={data.description} /> : null}
+          {data.reference ? <LedgerRow label="Referencia" value={data.reference} num /> : null}
+        </dl>
+      ) : null}
+
+      <div className={hasLedger ? '' : 'border-t border-[var(--color-rule)] pt-[var(--space-sm)]'}>
+        <p className="flex items-center gap-1.5 text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+          <Lock size={12} aria-hidden />
+          Pago seguro procesado por Consi
+        </p>
+        <p className="mt-1 text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+          Pasarela de pagos multimoneda USD/VES
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Hairline key/value row. `num` puts the value in the money face. */
+function LedgerRow({ label, value, num }: { label: string; value: string; num?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-[var(--space-sm)] border-b border-[var(--color-rule)] py-[var(--space-2xs)] last:border-b-0">
+      <dt className="label shrink-0">{label}</dt>
+      <dd
+        title={value}
+        className={`min-w-0 truncate text-right text-[length:var(--text-sm)] text-[var(--color-ink-2)] ${num ? 'num' : ''}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * A payment rail. Selecting it creates the charge, so it reads as a forward
+ * action (chevron) rather than a radio — the affordance matches what happens.
+ */
+function MethodRow({
+  method,
+  label,
+  disabled,
+  pending,
+  onSelect,
+}: {
+  method: PaymentMethod;
+  label: string;
+  disabled: boolean;
+  pending: boolean;
+  onSelect: () => void;
+}) {
+  const tagline = METHOD_TAGLINE[method];
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onSelect}
+      className="group flex w-full items-center gap-[var(--space-xs)] px-[var(--space-2xs)] py-[var(--space-xs)] text-left transition-colors duration-[var(--dur-fast)] hover:bg-[var(--color-paper-3)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-focus)] disabled:pointer-events-none disabled:opacity-45"
+    >
+      <span
+        aria-hidden
+        className="flex shrink-0 text-[var(--color-ink-4)] transition-colors duration-[var(--dur-fast)] group-hover:text-[var(--color-accent)]"
+      >
+        {METHOD_ICON[method]}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium text-[var(--color-ink)]">{label}</span>
+        {tagline ? (
+          <span className="mt-0.5 block text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+            {tagline}
+          </span>
+        ) : null}
+      </span>
+      {pending ? (
+        <span className="label shrink-0">Creando…</span>
+      ) : (
+        <ArrowRight
+          size={14}
+          aria-hidden
+          className="shrink-0 text-[var(--color-ink-4)] transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)] group-hover:translate-x-0.5 group-hover:text-[var(--color-accent)]"
+        />
+      )}
+    </button>
   );
 }
 
@@ -433,6 +640,7 @@ function InstructionsView({
   token,
   instructions,
   busy,
+  errorNotice,
   reference,
   onReferenceChange,
   phone,
@@ -450,6 +658,7 @@ function InstructionsView({
   token: string;
   instructions: PaymentInstructions;
   busy: boolean;
+  errorNotice: React.ReactNode;
   reference: string;
   onReferenceChange: (value: string) => void;
   phone: string;
@@ -470,93 +679,87 @@ function InstructionsView({
   const isC2P = instructions.method === 'C2P' || instructions.method === 'OTP_DEBIT';
   const isZelle = instructions.method === 'ZELLE';
   const [useReference, setUseReference] = useState(false);
+  // The vault call runs inside CardDropIn, so the submit button needs its own
+  // in-flight flag — `busy` only flips once tokenization has already returned.
+  const [tokenizing, setTokenizing] = useState(false);
   const phoneMode = isPagoMovil && !useReference;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <span className="flex size-8 items-center justify-center rounded-[9px] bg-[var(--blue-100)] text-[var(--blue-700)]">
-          {METHOD_ICON[instructions.method]}
-        </span>
-        <span className="font-bold text-[var(--text-strong)]">{instructions.label}</span>
+    <div className="mt-[var(--space-lg)] flex flex-col gap-[var(--space-md)]">
+      <div>
+        <p className="label flex items-center gap-1.5">
+          <span aria-hidden className="flex text-[var(--color-ink-4)]">
+            {METHOD_ICON[instructions.method]}
+          </span>
+          Vía de pago
+        </p>
+        <h2 className="mt-1 text-[length:var(--text-md)]">{instructions.label}</h2>
+        <p className="mt-1.5 max-w-[52ch] text-[length:var(--text-sm)] leading-relaxed text-[var(--color-ink-3)]">
+          {instructions.note}
+        </p>
       </div>
-      <p className="text-[13px] leading-relaxed text-[var(--text-body)]">{instructions.note}</p>
 
       {instructions.interactive && isC2P ? (
-        <OtpForm token={token} onDone={onPaid} setError={setError} />
+        <OtpForm token={token} onDone={onPaid} setError={setError} errorNotice={errorNotice} />
       ) : instructions.interactive ? (
-        <CardDropIn onSuccess={onTokenizeSuccess} onError={setError} />
+        <>
+          <CardDropIn
+            onSuccess={onTokenizeSuccess}
+            onError={setError}
+            onLoadingChange={setTokenizing}
+          />
+          {errorNotice}
+          <Button
+            type="submit"
+            form="card-dropin-form"
+            size="lg"
+            disabled={busy || tokenizing}
+          >
+            {busy || tokenizing ? 'Procesando…' : 'Pagar ahora'}
+          </Button>
+        </>
       ) : (
         <>
-          {instructions.qr ? <QrBox value={instructions.qr} /> : null}
-          <div className="divide-y divide-[var(--ink-100)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--ink-150)]">
+          {instructions.qr ? <QrFigure value={instructions.qr} /> : null}
+
+          <dl className="border-y border-[var(--color-rule)]">
             {instructions.fields.map((f) => (
               <Field key={f.label} label={f.label} value={f.value} copyable={f.copyable !== false} />
             ))}
-          </div>
+          </dl>
 
           {phoneMode ? (
-            <label className="block space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-                Teléfono desde el que pagaste
-              </span>
-              <input
-                value={phone}
-                onChange={(e) => onPhoneChange(e.target.value)}
-                placeholder="Ej. 0412-1234567"
-                inputMode="tel"
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-              />
-              <span className="text-[11px] text-[var(--text-subtle)]">
-                Verificamos tu pago automáticamente con tu número. No necesitas la referencia.
-              </span>
-              <button
-                type="button"
-                onClick={() => onPhoneChange('0412-000-0000')}
-                className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
-              >
-                🧪 Usar teléfono de prueba
-              </button>
-            </label>
+            <ConfirmField
+              id="payer-phone"
+              label="Teléfono desde el que pagaste"
+              hint="Verificamos tu pago automáticamente con tu número. No necesitas la referencia."
+              placeholder="0412-1234567"
+              inputMode="tel"
+              value={phone}
+              onChange={onPhoneChange}
+              testValue="0412-000-0000"
+            />
           ) : isZelle ? (
-            <label className="block space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-                Correo desde el que enviaste el Zelle
-              </span>
-              <input
-                value={email}
-                onChange={(e) => onEmailChange(e.target.value)}
-                placeholder="tucorreo@ejemplo.com"
-                inputMode="email"
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-              />
-              <span className="text-[11px] text-[var(--text-subtle)]">
-                Verificamos tu pago automáticamente con el correo del remitente.
-              </span>
-              <button
-                type="button"
-                onClick={() => onEmailChange('pagador@test.com')}
-                className="text-[11px] font-semibold text-[var(--blue-700)] hover:underline"
-              >
-                🧪 Usar correo de prueba
-              </button>
-            </label>
+            <ConfirmField
+              id="payer-email"
+              label="Correo desde el que enviaste el Zelle"
+              hint="Verificamos tu pago automáticamente con el correo del remitente."
+              placeholder="tucorreo@ejemplo.com"
+              inputMode="email"
+              value={email}
+              onChange={onEmailChange}
+              testValue="pagador@test.com"
+            />
           ) : (
-            <label className="block space-y-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-                Número de referencia del pago
-              </span>
-              <input
-                value={reference}
-                onChange={(e) => onReferenceChange(e.target.value)}
-                placeholder="Ej. 0123456789"
-                inputMode="numeric"
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]"
-              />
-              <span className="text-[11px] text-[var(--text-subtle)]">
-                Ingresa la referencia que te dio tu banco para confirmar el pago.
-              </span>
-            </label>
+            <ConfirmField
+              id="payer-reference"
+              label="Número de referencia del pago"
+              hint="Ingresa la referencia que te dio tu banco para confirmar el pago."
+              placeholder="0123456789"
+              inputMode="numeric"
+              value={reference}
+              onChange={onReferenceChange}
+            />
           )}
 
           {isPagoMovil ? (
@@ -566,50 +769,84 @@ function InstructionsView({
                 setUseReference((v) => !v);
                 setError(null);
               }}
-              className="text-[12px] font-medium text-[var(--blue-700)] hover:underline"
+              className="self-start text-[length:var(--text-sm)] text-[var(--color-accent)] underline-offset-4 hover:underline"
             >
-              {useReference ? '← Verificar con mi número de teléfono' : '¿Prefieres usar la referencia bancaria?'}
+              {useReference
+                ? 'Verificar con mi número de teléfono'
+                : '¿Prefieres usar la referencia bancaria?'}
             </button>
           ) : null}
+
+          {errorNotice}
+
+          <Button
+            type="button"
+            size="lg"
+            disabled={
+              busy || (phoneMode && phone.trim().length < 7) || (isZelle && !email.includes('@'))
+            }
+            onClick={phoneMode ? onConfirmByPhone : isZelle ? onConfirmByEmail : onConfirm}
+          >
+            {busy
+              ? 'Verificando…'
+              : phoneMode || isZelle
+                ? 'Verificar mi pago'
+                : 'Ya realicé el pago'}
+          </Button>
         </>
       )}
 
-      {instructions.interactive && isC2P ? null : (
+      <Button type="button" variant="ghost" className="self-start" onClick={onBack}>
+        <ArrowLeft size={14} aria-hidden />
+        Cambiar método
+      </Button>
+    </div>
+  );
+}
+
+/** Labelled confirmation input + hint, with a dev-only prefill. */
+function ConfirmField({
+  id,
+  label,
+  hint,
+  placeholder,
+  inputMode,
+  value,
+  onChange,
+  testValue,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  placeholder: string;
+  inputMode: 'tel' | 'email' | 'numeric';
+  value: string;
+  onChange: (value: string) => void;
+  testValue?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        className="font-[family-name:var(--font-mono)]"
+      />
+      <p id={`${id}-hint`} className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+        {hint}
+      </p>
+      {DEV && testValue ? (
         <button
-          type={instructions.interactive ? 'submit' : 'button'}
-          form={instructions.interactive ? 'card-dropin-form' : undefined}
-          disabled={
-            busy ||
-            (phoneMode && phone.trim().length < 7) ||
-            (isZelle && !email.includes('@'))
-          }
-          onClick={
-            instructions.interactive
-              ? undefined
-              : phoneMode
-                ? onConfirmByPhone
-                : isZelle
-                  ? onConfirmByEmail
-                  : onConfirm
-          }
-          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
-          style={{ background: 'var(--gradient-brand)' }}
+          type="button"
+          onClick={() => onChange(testValue)}
+          className="self-start text-[length:var(--text-xs)] text-[var(--color-accent)] underline-offset-4 hover:underline"
         >
-          {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-          {instructions.interactive
-            ? 'Pagar ahora'
-            : phoneMode || isZelle
-              ? 'Verificar mi pago'
-              : 'Ya realicé el pago'}
+          Usar valor de prueba
         </button>
-      )}
-      <button
-        type="button"
-        onClick={onBack}
-        className="w-full text-center text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text-strong)]"
-      >
-        ← Cambiar método de pago
-      </button>
+      ) : null}
     </div>
   );
 }
@@ -623,10 +860,12 @@ function OtpForm({
   token,
   onDone,
   setError,
+  errorNotice,
 }: {
   token: string;
   onDone: () => void;
   setError: (err: string | null) => void;
+  errorNotice: React.ReactNode;
 }) {
   const [cedula, setCedula] = useState('');
   const [phone, setPhone] = useState('');
@@ -665,104 +904,175 @@ function OtpForm({
     }
   }, [token, otp, onDone, setError]);
 
-  const inputClass =
-    'w-full rounded-[var(--radius-sm)] border border-[var(--ink-150)] px-3.5 py-2.5 font-mono text-sm outline-none focus:border-[var(--blue-400)]';
-
   if (!sent) {
     return (
-      <div className="space-y-3">
-        <input value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="Cédula (ej. V-12345678)" className={inputClass} />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono (ej. 0412-1234567)" inputMode="tel" className={inputClass} />
-        <input value={bank} onChange={(e) => setBank(e.target.value)} placeholder="Banco (ej. 0172)" className={inputClass} />
-        <button
+      <div className="flex flex-col gap-[var(--space-sm)]">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="otp-cedula">Cédula</Label>
+          <Input
+            id="otp-cedula"
+            value={cedula}
+            onChange={(e) => setCedula(e.target.value)}
+            placeholder="V-12345678"
+            className="font-[family-name:var(--font-mono)]"
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-[var(--space-sm)] min-[360px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="otp-phone">Teléfono</Label>
+            <Input
+              id="otp-phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0412-1234567"
+              inputMode="tel"
+              className="font-[family-name:var(--font-mono)]"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="otp-bank">Banco</Label>
+            <Input
+              id="otp-bank"
+              value={bank}
+              onChange={(e) => setBank(e.target.value)}
+              placeholder="0172"
+              inputMode="numeric"
+              className="font-[family-name:var(--font-mono)]"
+            />
+          </div>
+        </div>
+        {errorNotice}
+        <Button
           type="button"
+          size="lg"
           disabled={busy || cedula.trim().length < 5 || phone.trim().length < 7}
           onClick={request}
-          className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
-          style={{ background: 'var(--gradient-brand)' }}
         >
-          {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-          Solicitar clave OTP
-        </button>
+          {busy ? 'Solicitando…' : 'Solicitar clave OTP'}
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <label className="block space-y-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-          Clave OTP
-        </span>
-        <input
+    <div className="flex flex-col gap-[var(--space-sm)]">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="otp-code">Clave OTP</Label>
+        <Input
+          id="otp-code"
           value={otp}
           onChange={(e) => setOtp(e.target.value)}
-          placeholder="Ej. 123456"
+          placeholder="123456"
           inputMode="numeric"
-          className={inputClass}
+          autoComplete="one-time-code"
+          className="font-[family-name:var(--font-mono)] tracking-[0.2em]"
         />
-        <span className="text-[11px] text-[var(--text-subtle)]">
+        <p className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
           Ingresa la clave que tu banco te envió para autorizar el débito.
-        </span>
-      </label>
-      <button
-        type="button"
-        disabled={busy || otp.trim().length < 4}
-        onClick={confirm}
-        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-4 py-3.5 font-bold text-white shadow-[var(--glow-brand)] transition-opacity hover:opacity-95 disabled:opacity-50"
-        style={{ background: 'var(--gradient-brand)' }}
-      >
-        {busy ? <Loader2 size={16} className="animate-spin" /> : null}
-        Autorizar pago
-      </button>
-    </div>
-  );
-}
-
-function Field({ label, value, copyable }: { label: string; value: string; copyable: boolean }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="flex items-center justify-between gap-3 bg-white px-3.5 py-2.5">
-      <div className="min-w-0">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--text-subtle)]">
-          {label}
-        </div>
-        <div className="truncate font-mono text-[13px] font-semibold text-[var(--text-strong)]">
-          {value}
-        </div>
+        </p>
       </div>
-      {copyable ? (
-        <button
-          type="button"
-          aria-label={`Copiar ${label}`}
-          onClick={() => {
-            navigator.clipboard.writeText(value);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1200);
-          }}
-          className="flex size-8 flex-none items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:bg-[var(--ink-50)] hover:text-[var(--blue-700)]"
-        >
-          {copied ? <CheckCircle2 size={15} className="text-[var(--success-600)]" /> : <Copy size={15} />}
-        </button>
-      ) : null}
+      {errorNotice}
+      <Button type="button" size="lg" disabled={busy || otp.trim().length < 4} onClick={confirm}>
+        {busy ? 'Autorizando…' : 'Autorizar pago'}
+      </Button>
     </div>
   );
 }
 
-function QrBox({ value }: { value: string }) {
-  // Rendered via a public QR image service for the MVP; swap for a bundled encoder
-  // in production. The raw value below is always available as a fallback to copy.
-  const src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=${encodeURIComponent(value)}`;
+/** Instruction field: mono label, mono value, hairline row, copy swaps to a check. */
+function Field({ label, value, copyable }: { label: string; value: string; copyable: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-[var(--radius-md)] border border-[var(--ink-150)] bg-white p-4">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="Código QR de pago" width={150} height={150} className="rounded-[8px]" />
-      <span className="text-[11px] text-[var(--text-subtle)]">Escanea para pagar</span>
+    <div className="border-b border-[var(--color-rule)] py-[var(--space-2xs)] last:border-b-0">
+      <dt className="label">{label}</dt>
+      <dd className="flex items-center justify-between gap-[var(--space-xs)]">
+        <span
+          title={value}
+          className="num min-w-0 truncate text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]"
+        >
+          {value}
+        </span>
+        {copyable ? <CopyButton value={value} label={label} variant="ghost" /> : null}
+      </dd>
     </div>
   );
 }
 
-function DoneView({ successUrl }: { successUrl: string | null }) {
+/**
+ * Encoded in the browser, not by a third party.
+ *
+ * This used to call api.qrserver.com with the payload in the query string, which
+ * put the merchant's wallet address / Pago Móvil target in an unaffiliated host's
+ * access logs on every checkout view. Nothing leaves the page now.
+ *
+ * The dark/light pair is hardcoded black-on-white on purpose: a QR needs maximum
+ * luminance contrast plus a quiet zone to scan, so it must NOT follow the theme —
+ * a themed code on a dark surface is a code no phone can read. The white ground is
+ * baked into the SVG, so the surrounding panel stays free to be a Cobalt surface.
+ */
+function QrFigure({ value }: { value: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    QRCode.toString(value, {
+      type: 'svg',
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    })
+      .then((out) => live && setSvg(`data:image/svg+xml;utf8,${encodeURIComponent(out)}`))
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [value]);
+
+  // The payload is always readable as a copyable field below, so a failed encode
+  // collapses the figure rather than leaving an empty frame on a payment page.
+  if (failed || !svg) return null;
+
+  return (
+    <figure className="flex flex-col items-center gap-[var(--space-2xs)] self-start rounded-[var(--radius-md)] border border-[var(--color-rule)] p-[var(--space-2xs)]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={svg} alt={`Código QR con la dirección de pago ${value}`} width={168} height={168} />
+      <figcaption className="label pb-[var(--space-3xs)]">Escanea para pagar</figcaption>
+    </figure>
+  );
+}
+
+/**
+ * Expired or cancelled link. Same readout voice as the receipt — the badge carries
+ * the state and the copy says who can fix it, because the payer cannot.
+ */
+function DeadLinkView({ status }: { status: 'EXPIRED' | 'CANCELLED' }) {
+  const expired = status === 'EXPIRED';
+  return (
+    <div className="mt-[var(--space-lg)] flex flex-col gap-[var(--space-sm)]">
+      <div className="self-start">
+        <StatusBadge status={expired ? 'EXPIRED' : 'FAILED'} />
+      </div>
+      <h2 className="text-[length:var(--text-lg)]">
+        {expired ? 'Este link de pago venció' : 'Este link de pago fue cancelado'}
+      </h2>
+      <p className="max-w-[52ch] text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+        {expired
+          // No directional wording: the order rail sits beside this at ≥880px and above it below.
+          ? 'No se puede completar el pago con este link. Pídele al comercio uno nuevo — el monto y el concepto siguen visibles para que sepas de qué se trataba.'
+          : 'El comercio canceló este cobro, así que no se puede pagar. Si crees que es un error, escríbele directamente.'}
+      </p>
+      <p className="label border-t border-[var(--color-rule)] pt-[var(--space-sm)]">
+        No se te cobró nada
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The payer's receipt reads in the same voice as the merchant's transaction row —
+ * same StatusBadge, same money face. No celebratory motion; the state is the news.
+ */
+function DoneView({ data }: { data: CheckoutData }) {
   useEffect(() => {
     // Notify the embedding page (consi.js drop-in), if any.
     if (window.parent !== window) {
@@ -771,24 +1081,38 @@ function DoneView({ successUrl }: { successUrl: string | null }) {
   }, []);
 
   useEffect(() => {
-    if (successUrl) {
+    if (data.successUrl) {
       const t = setTimeout(() => {
-        window.location.href = successUrl;
+        window.location.href = data.successUrl as string;
       }, 2500);
       return () => clearTimeout(t);
     }
-  }, [successUrl]);
+  }, [data.successUrl]);
 
   return (
-    <div className="flex flex-col items-center gap-3 py-6 text-center">
-      <span className="flex size-16 items-center justify-center rounded-full bg-[var(--success-100)]">
-        <CheckCircle2 size={36} className="text-[var(--success-600)]" />
-      </span>
-      <div className="text-lg font-extrabold text-[var(--text-strong)]">¡Pago confirmado!</div>
-      <p className="text-[13px] text-[var(--text-muted)]">
-        Tu pago fue recibido correctamente.
-        {successUrl ? ' Redirigiendo…' : ''}
+    <div className="mt-[var(--space-lg)] flex flex-col gap-[var(--space-sm)]">
+      {/* The chip must hug its label — a stretched flex child would paint a full-width bar. */}
+      <div className="self-start">
+        <StatusBadge status="COMPLETED" />
+      </div>
+      <h2 className="text-[length:var(--text-lg)]">Pago confirmado</h2>
+      <p className="max-w-[52ch] text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+        {/* No trailing period: business names here routinely end in "C.A." */}
+        Recibimos{' '}
+        <span className="num text-[var(--color-ink)]">
+          {formatMoney(data.amount, data.currency)}
+        </span>{' '}
+        para {data.businessName}
+        {data.successUrl ? ' · te estamos redirigiendo al comercio…' : ''}
       </p>
+      {data.successUrl ? (
+        <a
+          href={data.successUrl}
+          className="self-start text-[length:var(--text-sm)] text-[var(--color-accent)] underline-offset-4 hover:underline"
+        >
+          Volver al comercio ahora
+        </a>
+      ) : null}
     </div>
   );
 }

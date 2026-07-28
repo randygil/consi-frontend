@@ -1,5 +1,9 @@
 'use client';
 
+/* Hallmark · genre: modern-minimal · macrostructure: 05 Workbench
+ * design-system: design.md · theme: Cobalt (light + dark)
+ */
+
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -7,26 +11,60 @@ import { ArrowLeft, Pencil } from 'lucide-react';
 import { CustomerForm } from '@/components/dashboard/customer-form';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Card } from '@/components/ui/card';
+import { Column, DataTable } from '@/components/ui/data-table';
+import { Notice, PageHead } from '@/components/ui/page-head';
 import { api } from '@/lib/api-client';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatMoney, statusLabel, typeLabel } from '@/lib/format';
 import type { Customer, Transaction } from '@/lib/types';
+
+const COLUMNS: Column<Transaction>[] = [
+  {
+    id: 'reference',
+    header: 'Referencia',
+    num: true,
+    align: 'left',
+    value: (t) => t.reference,
+    cell: (t) => (
+      <span className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">{t.reference}</span>
+    ),
+  },
+  { id: 'type', header: 'Tipo', value: (t) => t.type, text: (t) => typeLabel(t.type), cell: (t) => typeLabel(t.type) },
+  { id: 'currency', header: 'Moneda', num: true, align: 'left', value: (t) => t.currency },
+  {
+    id: 'amount',
+    header: 'Monto',
+    num: true,
+    value: (t) => Number(t.amount),
+    text: (t) => formatMoney(t.amount, t.currency),
+    cell: (t) => <span className="text-[var(--color-ink)]">{formatMoney(t.amount, t.currency)}</span>,
+  },
+  {
+    id: 'status',
+    header: 'Estado',
+    value: (t) => t.status,
+    text: (t) => statusLabel(t.status),
+    cell: (t) => <StatusBadge status={t.status} />,
+  },
+  {
+    id: 'createdAt',
+    header: 'Fecha',
+    num: true,
+    value: (t) => t.createdAt,
+    text: (t) => formatDate(t.createdAt),
+    cell: (t) => (
+      <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+        {formatDate(t.createdAt)}
+      </span>
+    ),
+  },
+];
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
-      <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-        {label}
-      </dt>
-      <dd className="text-sm text-[var(--text-strong)]">{value || '—'}</dd>
+      <dt className="label">{label}</dt>
+      <dd className="mt-0.5 text-[length:var(--text-sm)] text-[var(--color-ink)]">{value || '—'}</dd>
     </div>
   );
 }
@@ -35,100 +73,88 @@ export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [txns, setTxns] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function load() {
+  useEffect(() => {
     if (!params.id) return;
     api.getCustomer(params.id).then(setCustomer).catch((e) => setError(e.message));
-    api.getCustomerTransactions(params.id).then(setTxns).catch(() => {});
+    api
+      .getCustomerTransactions(params.id)
+      .then(setTxns)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [params.id]);
+
+  function reload() {
+    if (!params.id) return;
+    api.getCustomer(params.id).then(setCustomer).catch((e) => setError(e.message));
   }
 
-  useEffect(load, [params.id]);
-
-  if (error) return <p className="p-6 text-sm text-[var(--red-600)]">{error}</p>;
-  if (!customer) return <p className="p-6 text-sm text-[var(--text-muted)]">Cargando…</p>;
+  if (error) return <Notice kind="err">{error}</Notice>;
+  if (!customer) {
+    return <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">Cargando…</p>;
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-[var(--space-md)]">
       <Link
         href="/customers"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+        className="inline-flex w-fit items-center gap-1.5 text-[length:var(--text-sm)] text-[var(--color-ink-3)] transition-colors duration-[var(--dur-fast)] hover:text-[var(--color-accent)]"
       >
-        <ArrowLeft size={16} /> Clientes
+        <ArrowLeft size={15} /> Clientes
       </Link>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>
-            {customer.firstName} {customer.lastName}
-          </CardTitle>
-          {!editing && (
+      <PageHead
+        title={`${customer.firstName} ${customer.lastName}`}
+        lede={customer.email}
+        action={
+          editing ? undefined : (
             <Button variant="outline" onClick={() => setEditing(true)}>
-              <Pencil size={15} /> Editar
+              <Pencil size={14} /> Editar
             </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          {editing ? (
-            <CustomerForm
-              initial={customer}
-              submitLabel="Guardar cambios"
-              onSubmit={async (input) => {
-                await api.updateCustomer(customer.id, input);
-                setEditing(false);
-                load();
-              }}
-            />
-          ) : (
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Correo" value={customer.email} />
-              <Field label="Cédula / RIF" value={customer.cedula} />
-              <Field label="Teléfono" value={customer.phone} />
-              <Field label="País" value={customer.country} />
-              <Field label="Dirección" value={customer.address} />
-              <Field label="Registrado" value={formatDate(customer.createdAt)} />
-            </dl>
-          )}
-        </CardContent>
+          )
+        }
+      />
+
+      <Card className="p-[var(--space-md)]">
+        {editing ? (
+          <CustomerForm
+            initial={customer}
+            submitLabel="Guardar cambios"
+            onSubmit={async (input) => {
+              await api.updateCustomer(customer.id, input);
+              setEditing(false);
+              reload();
+            }}
+          />
+        ) : (
+          <dl className="grid grid-cols-1 gap-[var(--space-sm)] sm:grid-cols-3">
+            <Field label="Correo" value={customer.email} />
+            <Field label="Cédula / RIF" value={customer.cedula} />
+            <Field label="Teléfono" value={customer.phone} />
+            <Field label="País" value={customer.country} />
+            <Field label="Dirección" value={customer.address} />
+            <Field label="Registrado" value={formatDate(customer.createdAt)} />
+          </dl>
+        )}
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Transacciones</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {txns.length === 0 ? (
-            <p className="p-6 text-sm text-[var(--text-muted)]">Sin transacciones.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Referencia</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead>Fecha</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {txns.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="font-mono text-xs">{t.reference}</TableCell>
-                    <TableCell>{t.type}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={t.status} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatMoney(t.amount, t.currency)}
-                    </TableCell>
-                    <TableCell>{formatDate(t.createdAt)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+      <Card className="p-[var(--space-md)]">
+        <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Transacciones</h2>
+        <DataTable
+          id="customer-transactions"
+          caption={`Transacciones de ${customer.firstName} ${customer.lastName}`}
+          columns={COLUMNS}
+          rows={txns}
+          rowKey={(t) => t.id}
+          loading={loading}
+          empty="Sin transacciones."
+          searchPlaceholder="Buscar por referencia…"
+          defaultSort={{ id: 'createdAt', dir: 'desc' }}
+          exportFilename={`transacciones_${customer.lastName.toLowerCase()}`}
+        />
       </Card>
     </div>
   );

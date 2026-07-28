@@ -81,11 +81,38 @@ Pages within a family share the family's shape and vary only in archetypes.
 | --- | --- | --- |
 | **App** | 05 Workbench — rail + header + dense work surface | `/`, `/links`, `/transactions`, `/payouts`, `/settlements`, `/admin`, `/admin/merchants`, `/admin/merchants/new`, `/admin/merchants/[id]` |
 | **Docs** | 21 Component Playground — section index + prose + request/response | `/docs`, `/developers` |
-| **Focused** | 04 Stat-Led — the single figure is the hero | `/c/[token]`, `/login` |
+| **Focused** | 04 Stat-Led — the single figure is the hero | `/c/[token]`, `/login`, `/forgot-password`, `/reset-password` |
 
 Every route opens with `<PageHead>` (display title · optional lede · optional
 action, hairline underneath). That component *is* the section rhythm — do not
 hand-roll a per-page variant.
+
+### The Focused family, specifically
+
+Focused pages are the only ones a non-merchant ever sees, so they carry **no
+card, no shadow and no app chrome** — a bare centred column on paper, opening
+with the wordmark + `<ThemeToggle>` pair and an `<h1>`. `/login`,
+`/forgot-password` and `/reset-password` share a 360px column; `/c/[token]` is
+the one two-panel member (order rail ⇄ act column, hairline seam at ≥880px)
+because the amount must stay on screen while the payer works.
+
+Rules that hold:
+
+- **The amount is the hero and it is never graphite.** Graphite stays reserved
+  for the dashboard readout and code cards; a second dark surface on the
+  checkout would dilute it into decoration.
+- **A QR is not themed.** Scanners need maximum luminance contrast plus a quiet
+  zone, so QR codes are always black-on-white with the white ground baked into
+  the SVG, whatever the theme is doing. They are also encoded **in the browser**
+  — never by a URL-based third-party image service, which would put the
+  merchant's payment target in someone else's access logs.
+- **Terminal states are states, not errors.** An expired or cancelled link
+  renders a `<StatusBadge>` + heading + what-to-do, never a form the backend
+  will refuse.
+- **Credentials never render.** Password-reset links and API tokens appear only
+  behind `process.env.NODE_ENV === 'development'`.
+- **`/c/**` is `noindex`.** Payment links get pasted into chat apps that hand
+  URLs to crawlers; `src/app/c/layout.tsx` owns that metadata.
 
 ### The Docs family, specifically
 
@@ -142,6 +169,72 @@ hatch, and no specificity fight with the utilities on cards and tables.
 - **Footer:** Ft2 inline single line, on public surfaces only. Dashboards get no
   footer.
 
+## Tables
+
+Every tabular surface in the product goes through **one** component:
+[`src/components/ui/data-table.tsx`](src/components/ui/data-table.tsx). Do not
+hand-roll a `<Table>` on a page — the raw primitives in `ui/table.tsx` exist
+only as the DataTable's own building blocks.
+
+A table is declared as **columns, not markup**:
+
+```tsx
+const COLUMNS: Column<Transaction>[] = [
+  { id: 'amount', header: 'Monto', num: true,
+    value: (t) => Number(t.amount),                    // sorts, searches, fills the sheet
+    text:  (t) => formatMoney(t.amount, t.currency) }, // reads in CSV and PDF
+];
+```
+
+- **`value` is the primitive**, `cell` is the pixels, `text` is the printed
+  string. Money returns a `Number` from `value` so a column sorts numerically
+  and lands in Excel as a real number you can sum; `text` carries the formatted
+  version for CSV and PDF. Dates return the raw ISO string — ISO-8601 sorts
+  chronologically as text, so no date parsing is needed to rank a column.
+- **Every multi-currency table carries a `Moneda` column.** `value` on a money
+  column is a bare number; without the currency beside it the export is a lie.
+- **Empty sorts last in both directions.** A missing amount is not a small
+  amount, and flipping the arrow must not float the blanks to the top.
+
+What the component owns, so no page re-implements it: three-state sort
+(asc → desc → source order), search, column visibility, pagination, export,
+and the loading / empty / error / no-match states.
+
+Rules that hold:
+
+- **Export follows the visible columns.** What you see is what leaves the
+  building — hide a column and it disappears from the CSV, the sheet and the
+  PDF. Three formats (CSV · Excel · PDF) behind one menu.
+- **`xlsx` and `jspdf` are imported dynamically.** They are ~1 MB together; a
+  route that renders a table but never exports must not download them. Never
+  add a static import of either.
+- **The PDF is the one place literal RGB is allowed.** jsPDF cannot read CSS
+  custom properties, so `table-export.ts` holds the sRGB renderings of the
+  accent / ink / zebra tokens in a single `PRINT` constant. That block is the
+  only sanctioned duplication of a token value in the codebase; if `tokens.css`
+  changes, change it there too.
+- **Capped endpoints export uncapped.** Where the list call is limited, pass
+  `exportAll` so the export re-fetches the full matching set instead of writing
+  out one page.
+- **Server-side search delegates, it does not duplicate.** A table whose
+  endpoint matches across the whole collection (`/customers`) passes
+  `onSearchChange` and debounces on the page. Same field, same position — the
+  user never learns which tables search locally.
+- **Column visibility and page size persist** per table id in
+  `localStorage['consi-table:<id>']`. Read after mount, never during render.
+- **Not every table is a report.** Review queues and configuration grids
+  (`/admin` approvals, per-merchant gateway priorities, the dashboard's
+  five-row recap) pass `searchable={false} exportable={false}`. Same chrome,
+  no controls that would only add noise.
+- **Rows are not buttons.** A clickable `<tr>` cannot be reached from a
+  keyboard without breaking table semantics. Navigation goes in a real `<Link>`
+  inside the first cell; actions go in a real `<button>` in a pinned last
+  column.
+- **The sort comparator is tested**, not eyeballed —
+  [`src/lib/table.test.ts`](src/lib/table.test.ts), run with `pnpm test`.
+  Node strips the types natively; there is no test framework in this project
+  and there does not need to be one.
+
 ## Motion
 
 - Easings: `--ease-out` `cubic-bezier(0.16,1,0.3,1)` and siblings in `tokens.css`.
@@ -191,12 +284,13 @@ empty state — not a plausible number.
 - The display / body / mono trio.
 - The CTA voice — 6px radius, fill vs hairline.
 - `<PageHead>` for section rhythm; `.label` for all meta; `.num` for all figures.
+- `<DataTable>` for every tabular surface — never a hand-rolled `<Table>`.
 - Both themes. Anything added must be checked in light **and** dark.
 
 ## What pages MAY differ on
 
 - Macrostructure, within the family table above.
-- Table column sets and filter rows.
+- Table column sets, filter toolbars, and which DataTable controls are on.
 - Whether the page carries a graphite surface (App: only the dashboard readout).
 
 ## Banned in this system

@@ -1,41 +1,56 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { ShieldAlert, FileText, Upload, CheckCircle2, AlertTriangle, AlertOctagon, RefreshCw } from 'lucide-react';
+/* Hallmark · genre: modern-minimal · macrostructure: 05 Workbench
+ * design-system: design.md · theme: Cobalt (light + dark)
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertOctagon, CheckCircle2, RefreshCw, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { StatusBadge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Column, DataTable } from '@/components/ui/data-table';
+import { Notice, PageHead } from '@/components/ui/page-head';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Dispute } from '@/lib/types';
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING_EVIDENCE: 'Pendiente de Evidencia',
-  UNDER_REVIEW: 'En Revisión del Banco',
-  WON: 'Ganada (Fondos Revertidos)',
-  LOST: 'Perdida',
+const STATUS: Record<Dispute['status'], { text: string; tone: string }> = {
+  PENDING_EVIDENCE: {
+    text: 'Pendiente de evidencia',
+    tone: 'text-[var(--color-warn)] bg-[var(--color-warn-soft)]',
+  },
+  UNDER_REVIEW: {
+    text: 'En revisión',
+    tone: 'text-[var(--color-accent)] bg-[var(--color-accent-soft)]',
+  },
+  WON: { text: 'Ganada', tone: 'text-[var(--color-ok)] bg-[var(--color-ok-soft)]' },
+  LOST: { text: 'Perdida', tone: 'text-[var(--color-bad)] bg-[var(--color-bad-soft)]' },
 };
+
+function DisputeBadge({ status }: { status: Dispute['status'] }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-xs)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] ${STATUS[status].tone}`}
+    >
+      <span className="size-1.5 rounded-full bg-current" aria-hidden />
+      {STATUS[status].text}
+    </span>
+  );
+}
 
 export default function DisputesPage() {
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const [activeDispute, setActiveDispute] = useState<Dispute | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [resolving, setResolving] = useState(false);
+  const [active, setActive] = useState<Dispute | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getDisputes();
-      setDisputes(data);
-    } catch (e: any) {
-      setError(e.message || 'Error al cargar disputas');
+      setDisputes(await api.getDisputes());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar disputas');
     } finally {
       setLoading(false);
     }
@@ -45,315 +60,352 @@ export default function DisputesPage() {
     load();
   }, [load]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!activeDispute || !selectedFile) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const updated = await api.uploadEvidence(activeDispute.id, selectedFile);
-      setActiveDispute(updated);
-      setSelectedFile(null);
-      load();
-    } catch (err: any) {
-      setError(err.message || 'Error al subir la evidencia');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleSubmitReview = async () => {
-    if (!activeDispute) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const updated = await api.submitDispute(activeDispute.id);
-      setActiveDispute(updated);
-      load();
-    } catch (err: any) {
-      setError(err.message || 'Error al enviar a revisión');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleResolveSimulation = async (status: 'WON' | 'LOST') => {
-    if (!activeDispute) return;
-    setResolving(true);
-    setError(null);
-    try {
-      // Direct call to resolution (forces ADMIN authorization on the backend, which succeeds since it's demo)
-      const updated = await api.resolveDispute(activeDispute.id, status);
-      setActiveDispute(updated);
-      load();
-    } catch (err: any) {
-      setError(err.message || 'Error al simular resolución');
-    } finally {
-      setResolving(false);
-    }
-  };
+  const columns = useMemo<Column<Dispute>[]>(
+    () => [
+      {
+        id: 'id',
+        header: 'Disputa',
+        num: true,
+        align: 'left',
+        value: (d) => d.id,
+        cell: (d) => (
+          <span className="text-[length:var(--text-xs)] text-[var(--color-ink)]">
+            {d.id.slice(0, 10)}
+          </span>
+        ),
+      },
+      {
+        id: 'transaction',
+        header: 'Transacción',
+        num: true,
+        align: 'left',
+        value: (d) => d.transaction.reference,
+        cell: (d) => (
+          <span className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+            {d.transaction.reference.slice(0, 14)}
+          </span>
+        ),
+      },
+      {
+        id: 'currency',
+        header: 'Moneda',
+        num: true,
+        align: 'left',
+        value: (d) => d.transaction.currency,
+      },
+      {
+        id: 'amount',
+        header: 'Monto disputado',
+        num: true,
+        value: (d) => Number(d.amount),
+        text: (d) => formatMoney(d.amount, d.transaction.currency),
+        cell: (d) => (
+          <span className="text-[var(--color-bad)]">
+            {formatMoney(d.amount, d.transaction.currency)}
+          </span>
+        ),
+      },
+      {
+        id: 'reason',
+        header: 'Motivo',
+        value: (d) => d.reason,
+        cell: (d) => (
+          <span className="block max-w-[28ch] truncate text-[length:var(--text-sm)]">
+            {d.reason}
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Estado',
+        value: (d) => d.status,
+        text: (d) => STATUS[d.status].text,
+        cell: (d) => <DisputeBadge status={d.status} />,
+      },
+      {
+        id: 'createdAt',
+        header: 'Reportada',
+        num: true,
+        value: (d) => d.createdAt,
+        text: (d) => formatDate(d.createdAt),
+        cell: (d) => (
+          <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+            {formatDate(d.createdAt)}
+          </span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Acciones',
+        align: 'right',
+        pinned: true,
+        sortable: false,
+        searchable: false,
+        exportable: false,
+        cell: (d) => (
+          <Button size="sm" variant="outline" onClick={() => setActive(d)}>
+            Gestionar
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Gestión de Disputas y Contracargos</h1>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading} className="gap-2">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Actualizar
-        </Button>
-      </div>
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Disputas"
+        lede="Cargos desconocidos por tus clientes. Presenta evidencia digital para revertir el débito ante la red bancaria."
+        action={
+          <Button variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw size={14} /> Actualizar
+          </Button>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold text-[var(--foreground)]">
-            Contracargos Reportados
-          </CardTitle>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Aquí puedes ver los cargos desconocidos por tus clientes y presentar las evidencias digitales correspondientes para revertir los débitos ante Visa/Mastercard.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {loading && disputes.length === 0 ? (
-            <div className="py-10 text-center text-sm text-[var(--muted-foreground)]">Cargando disputas…</div>
-          ) : disputes.length === 0 ? (
-            <div className="py-10 text-center text-sm text-[var(--muted-foreground)]">
-              No tienes contracargos registrados en este momento. ¡Buen trabajo!
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID de Disputa</TableHead>
-                  <TableHead>Transacción Original</TableHead>
-                  <TableHead>Monto Disputado</TableHead>
-                  <TableHead>Motivo</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Fecha Reporte</TableHead>
-                  <TableHead>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {disputes.map((dispute) => (
-                  <TableRow key={dispute.id} className="cursor-pointer" onClick={() => setActiveDispute(dispute)}>
-                    <TableCell className="font-mono text-xs font-semibold">{dispute.id.slice(0, 10)}</TableCell>
-                    <TableCell className="font-mono text-xs text-[var(--muted-foreground)]">
-                      {dispute.transaction.reference.slice(0, 14)}
-                    </TableCell>
-                    <TableCell className="font-semibold text-[var(--destructive)]">
-                      {formatMoney(dispute.amount, dispute.transaction.currency)}
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[200px] truncate">{dispute.reason}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-2.5 py-0.5 text-xs font-bold ${
-                        dispute.status === 'WON' ? 'bg-[var(--success-100)] text-[var(--success-700)]' :
-                        dispute.status === 'LOST' ? 'bg-[var(--danger-100)] text-[var(--danger-700)]' :
-                        dispute.status === 'UNDER_REVIEW' ? 'bg-[var(--blue-100)] text-[var(--blue-700)]' :
-                        'bg-[var(--warning-100)] text-[var(--warning-700)]'
-                      }`}>
-                        {STATUS_LABELS[dispute.status]}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-[var(--muted-foreground)]">{formatDate(dispute.createdAt)}</TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="outline">
-                        Gestionar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+      <Card className="p-[var(--space-md)]">
+        <DataTable
+          id="disputes"
+          caption="Contracargos reportados"
+          columns={columns}
+          rows={disputes}
+          rowKey={(d) => d.id}
+          loading={loading}
+          error={error}
+          empty="No tienes contracargos registrados."
+          searchPlaceholder="Buscar por referencia o motivo…"
+          defaultSort={{ id: 'createdAt', dir: 'desc' }}
+          exportFilename="disputas_consi"
+        />
       </Card>
 
-      {/* Dispute Detail / Evidence Upload Modal */}
-      {activeDispute && (() => {
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <Card className="w-full max-w-lg p-6 bg-white border border-[var(--border)] shadow-[var(--shadow-lg)] max-h-[90vh] overflow-y-auto">
-              <CardHeader className="p-0 mb-4 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-bold text-[var(--text-strong)] flex items-center gap-2">
-                    <ShieldAlert className="text-[var(--destructive)]" size={20} />
-                    Detalle de Contracargo
-                  </CardTitle>
-                  <p className="text-[11px] font-mono text-[var(--text-muted)] mt-1">Disputa ID: {activeDispute.id}</p>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => { setActiveDispute(null); setSelectedFile(null); }}>
-                  ✖
-                </Button>
-              </CardHeader>
-              <CardContent className="p-0 space-y-5">
-                {/* Transaction details block */}
-                <div className="rounded-md border border-[var(--ink-100)] divide-y divide-[var(--ink-100)] bg-[var(--ink-50)] text-xs">
-                  <div className="p-3 flex justify-between">
-                    <span className="font-bold text-[var(--text-muted)]">Transacción Ref:</span>
-                    <span className="font-mono">{activeDispute.transaction.reference}</span>
-                  </div>
-                  <div className="p-3 flex justify-between">
-                    <span className="font-bold text-[var(--text-muted)]">Monto Debitado:</span>
-                    <span className="font-bold text-[var(--destructive)]">
-                      {formatMoney(activeDispute.amount, activeDispute.transaction.currency)}
-                    </span>
-                  </div>
-                  <div className="p-3 flex justify-between">
-                    <span className="font-bold text-[var(--text-muted)]">Motivo del Banco:</span>
-                    <span className="text-[var(--text-strong)] font-semibold">{activeDispute.reason}</span>
-                  </div>
-                  <div className="p-3 flex justify-between">
-                    <span className="font-bold text-[var(--text-muted)]">Estado Actual:</span>
-                    <span className="font-extrabold">{STATUS_LABELS[activeDispute.status]}</span>
-                  </div>
-                </div>
+      {active ? (
+        <DisputeDialog
+          dispute={active}
+          onClose={() => setActive(null)}
+          onChanged={(updated) => {
+            setActive(updated);
+            load();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
-                {/* Evidence Upload Section */}
-                {activeDispute.status === 'PENDING_EVIDENCE' && (
-                  <div className="space-y-3.5 border border-dashed border-[var(--ink-200)] rounded-md p-4 bg-white">
-                    <h4 className="text-xs font-bold text-[var(--text-strong)] flex items-center gap-1.5">
-                      <FileText size={15} className="text-[var(--blue-600)]" />
-                      Cargar Evidencia (Recibos, Guías de Envío, Chats, Firma)
-                    </h4>
-                    <p className="text-[11px] text-[var(--text-muted)]">
-                      Sube un documento en PDF o imagen que compruebe que el servicio o producto fue entregado.
-                    </p>
+function DisputeDialog({
+  dispute,
+  onClose,
+  onChanged,
+}: {
+  dispute: Dispute;
+  onClose: () => void;
+  onChanged: (d: Dispute) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-                    {activeDispute.evidenceUrl ? (
-                      <div className="flex items-center justify-between rounded bg-[var(--success-50)] p-2.5 text-xs text-[var(--success-700)] border border-[var(--success-200)]">
-                        <span className="truncate font-semibold flex items-center gap-1.5">
-                          <CheckCircle2 size={15} /> Documento subido: {activeDispute.evidenceUrl.split('/').pop()}
-                        </span>
-                        <a href={activeDispute.evidenceUrl} target="_blank" rel="noreferrer" className="underline font-bold text-[var(--blue-700)] ml-2">
-                          Ver archivo
-                        </a>
-                      </div>
-                    ) : null}
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-                    <div className="flex gap-2.5 items-center">
-                      <input
-                        type="file"
-                        id="evidence-file-input"
-                        onChange={handleFileChange}
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="hidden"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => document.getElementById('evidence-file-input')?.click()}
-                        disabled={uploading}
-                        className="w-full gap-1.5 text-xs text-[var(--text-body)]"
-                      >
-                        <Upload size={14} />
-                        {selectedFile ? selectedFile.name : 'Seleccionar Documento'}
-                      </Button>
-                      {selectedFile && (
-                        <Button
-                          type="button"
-                          onClick={handleUpload}
-                          disabled={uploading}
-                          className="text-xs"
-                        >
-                          {uploading ? 'Cargando…' : 'Subir'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
+  async function run(key: string, fn: () => Promise<Dispute>) {
+    setBusy(key);
+    setError(null);
+    try {
+      onChanged(await fn());
+      setFile(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'La acción falló');
+    } finally {
+      setBusy(null);
+    }
+  }
 
-                {/* File link for under review or finished disputes */}
-                {activeDispute.status !== 'PENDING_EVIDENCE' && activeDispute.evidenceUrl && (
-                  <div className="rounded border border-[var(--ink-100)] p-3 bg-white text-xs flex justify-between items-center">
-                    <span className="font-semibold text-[var(--text-muted)]">Documento de Evidencia:</span>
-                    <a href={activeDispute.evidenceUrl} target="_blank" rel="noreferrer" className="underline font-bold text-[var(--blue-700)]">
-                      Ver Evidencia Presentada
-                    </a>
-                  </div>
-                )}
+  const facts = [
+    { label: 'Referencia', value: dispute.transaction.reference, num: true },
+    {
+      label: 'Monto debitado',
+      value: formatMoney(dispute.amount, dispute.transaction.currency),
+      num: true,
+    },
+    { label: 'Motivo del banco', value: dispute.reason },
+    { label: 'Estado', value: STATUS[dispute.status].text },
+  ];
 
-                {error && (
-                  <p className="text-xs text-[var(--destructive)] font-semibold bg-[var(--danger-100)] p-2 rounded-md">
-                    {error}
-                  </p>
-                )}
-
-                {/* Submitting Evidence to Bank */}
-                {activeDispute.status === 'PENDING_EVIDENCE' && activeDispute.evidenceUrl && (
-                  <Button
-                    onClick={handleSubmitReview}
-                    disabled={submitting}
-                    className="w-full font-bold text-white bg-[var(--blue-600)] hover:bg-[var(--blue-700)] shadow-sm py-3"
-                  >
-                    {submitting ? 'Enviando…' : 'Presentar Evidencia para Revisión Bancaria'}
-                  </Button>
-                )}
-
-                {/* SIMULATOR RESOLUTION PANEL (DX/QA Sandbox) */}
-                {activeDispute.status === 'UNDER_REVIEW' && (
-                  <div className="rounded-md border border-[var(--warning-200)] p-4 bg-[var(--warning-50)] space-y-3">
-                    <h4 className="text-xs font-bold text-[var(--warning-800)] flex items-center gap-1.5">
-                      <AlertTriangle size={15} />
-                      Simulación Sandbox (Acciones de Red Bancaria)
-                    </h4>
-                    <p className="text-[11px] text-[var(--warning-700)] leading-relaxed">
-                      Utiliza estos botones para simular la resolución que tomaría la red bancaria (Visa/Mastercard) tras auditar tu evidencia. Ganar la disputa devolverá los fondos a tu wallet inmediatamente.
-                    </p>
-                    <div className="grid grid-cols-2 gap-2.5 pt-1">
-                      <Button
-                        size="sm"
-                        onClick={() => handleResolveSimulation('WON')}
-                        disabled={resolving}
-                        className="bg-[var(--success-600)] hover:bg-[var(--success-700)] text-white font-bold text-xs"
-                      >
-                        Simular GANADA (Devolver Fondos)
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleResolveSimulation('LOST')}
-                        disabled={resolving}
-                        className="font-bold text-xs"
-                      >
-                        Simular PERDIDA
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Resolution Outcomes info messages */}
-                {activeDispute.status === 'WON' && (
-                  <div className="rounded bg-[var(--success-50)] p-3 text-xs text-[var(--success-700)] border border-[var(--success-200)] flex items-start gap-2">
-                    <CheckCircle2 size={16} className="mt-0.5" />
-                    <div>
-                      <span className="font-bold">¡Disputa ganada!</span> La red bancaria falló a tu favor. Los fondos disputados ({formatMoney(activeDispute.amount, activeDispute.transaction.currency)}) han sido acreditados nuevamente a tu cuenta comercial.
-                    </div>
-                  </div>
-                )}
-
-                {activeDispute.status === 'LOST' && (
-                  <div className="rounded bg-[var(--danger-50)] p-3 text-xs text-[var(--danger-700)] border border-[var(--danger-200)] flex items-start gap-2">
-                    <AlertOctagon size={16} className="mt-0.5" />
-                    <div>
-                      <span className="font-bold">Disputa perdida.</span> La red bancaria falló a favor del tarjetahabiente. El débito temporal queda confirmado de forma definitiva.
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button variant="outline" onClick={() => { setActiveDispute(null); setSelectedFile(null); }}>
-                    Cerrar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-scrim)] p-[var(--space-sm)]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dispute-title"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-[var(--space-md)]"
+      >
+        <div className="flex items-start justify-between gap-[var(--space-sm)]">
+          <div className="min-w-0">
+            <h2 id="dispute-title" className="text-[length:var(--text-md)]">
+              Detalle de contracargo
+            </h2>
+            <p className="num mt-1 truncate text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+              {dispute.id}
+            </p>
           </div>
-        );
-      })()}
+          <DisputeBadge status={dispute.status} />
+        </div>
+
+        <dl className="mt-[var(--space-sm)] divide-y divide-[var(--color-rule)] rounded-[var(--radius-sm)] border border-[var(--color-rule)]">
+          {facts.map((f) => (
+            <div key={f.label} className="flex items-baseline justify-between gap-3 px-3 py-2">
+              <dt className="label shrink-0">{f.label}</dt>
+              <dd
+                className={`text-right text-[length:var(--text-sm)] text-[var(--color-ink)] ${f.num ? 'num' : ''}`}
+              >
+                {f.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        {dispute.evidenceUrl ? (
+          <div className="mt-[var(--space-sm)] flex items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--color-rule)] px-3 py-2">
+            <span className="flex min-w-0 items-center gap-1.5 text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
+              <CheckCircle2 size={14} className="shrink-0 text-[var(--color-ok)]" aria-hidden />
+              <span className="truncate">{dispute.evidenceUrl.split('/').pop()}</span>
+            </span>
+            <a
+              href={dispute.evidenceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 whitespace-nowrap text-[length:var(--text-sm)] text-[var(--color-accent)] underline-offset-4 hover:underline"
+            >
+              Ver archivo
+            </a>
+          </div>
+        ) : null}
+
+        {dispute.status === 'PENDING_EVIDENCE' ? (
+          <div className="mt-[var(--space-sm)] flex flex-col gap-[var(--space-xs)] rounded-[var(--radius-sm)] border border-dashed border-[var(--color-rule)] p-[var(--space-sm)]">
+            <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">
+              Cargar evidencia
+            </p>
+            <p className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+              Un PDF o imagen que compruebe la entrega del producto o servicio: recibo, guía de
+              envío, conversación o firma.
+            </p>
+            <input
+              type="file"
+              id="evidence"
+              accept=".pdf,.png,.jpg,.jpeg"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => document.getElementById('evidence')?.click()}
+              >
+                <Upload size={14} />
+                <span className="max-w-[22ch] truncate">
+                  {file ? file.name : 'Seleccionar documento'}
+                </span>
+              </Button>
+              {file ? (
+                <Button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => run('upload', () => api.uploadEvidence(dispute.id, file))}
+                >
+                  {busy === 'upload' ? 'Cargando…' : 'Subir'}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="mt-[var(--space-sm)]">
+            <Notice kind="err">{error}</Notice>
+          </div>
+        ) : null}
+
+        {dispute.status === 'PENDING_EVIDENCE' && dispute.evidenceUrl ? (
+          <Button
+            className="mt-[var(--space-sm)] w-full"
+            disabled={busy !== null}
+            onClick={() => run('submit', () => api.submitDispute(dispute.id))}
+          >
+            {busy === 'submit' ? 'Enviando…' : 'Presentar evidencia al banco'}
+          </Button>
+        ) : null}
+
+        {dispute.status === 'UNDER_REVIEW' ? (
+          <div className="mt-[var(--space-sm)] flex flex-col gap-[var(--space-xs)] rounded-[var(--radius-sm)] border-l-2 border-[var(--color-warn)] bg-[var(--color-warn-soft)] px-3 py-2.5">
+            <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-warn)]">
+              Simulación sandbox
+            </p>
+            <p className="text-[length:var(--text-xs)] text-[var(--color-ink-2)]">
+              Simula el fallo que emitiría la red bancaria tras auditar tu evidencia. Ganar devuelve
+              los fondos a tu wallet de inmediato.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => run('won', () => api.resolveDispute(dispute.id, 'WON'))}
+              >
+                {busy === 'won' ? '…' : 'Simular ganada'}
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy !== null}
+                onClick={() => run('lost', () => api.resolveDispute(dispute.id, 'LOST'))}
+              >
+                {busy === 'lost' ? '…' : 'Simular perdida'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {dispute.status === 'WON' ? (
+          <div className="mt-[var(--space-sm)]">
+            <Notice kind="ok">
+              La red bancaria falló a tu favor. Los{' '}
+              <span className="num">
+                {formatMoney(dispute.amount, dispute.transaction.currency)}
+              </span>{' '}
+              fueron acreditados de nuevo a tu cuenta.
+            </Notice>
+          </div>
+        ) : null}
+
+        {dispute.status === 'LOST' ? (
+          <div className="mt-[var(--space-sm)] flex items-start gap-2 rounded-[var(--radius-sm)] border-l-2 border-[var(--color-bad)] bg-[var(--color-bad-soft)] px-3 py-2 text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
+            <AlertOctagon size={15} className="mt-0.5 shrink-0 text-[var(--color-bad)]" aria-hidden />
+            La red falló a favor del tarjetahabiente. El débito queda confirmado.
+          </div>
+        ) : null}
+
+        <div className="mt-[var(--space-md)] flex justify-end">
+          <Button variant="outline" onClick={onClose}>
+            Cerrar
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import { api } from '@/lib/api-client';
-import { clearToken, getStoredUser, getToken } from '@/lib/auth';
+import { clearToken, getStoredUser, getToken, setStoredUser } from '@/lib/auth';
 import type { AuthUser, MerchantProfile } from '@/lib/types';
 
 interface AuthState {
@@ -17,6 +17,9 @@ interface AuthState {
   merchant: MerchantProfile | null;
   loading: boolean;
   logout: () => void;
+  /** Merge a change into the session user and persist it, so the header updates
+   *  in place instead of the UI asking the user to reload the page. */
+  updateUser: (patch: Partial<AuthUser>) => void;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -24,6 +27,7 @@ const AuthContext = createContext<AuthState>({
   merchant: null,
   loading: true,
   logout: () => {},
+  updateUser: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -38,6 +42,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setMerchant(null);
     router.push('/login');
   }, [router]);
+
+  const updateUser = useCallback((patch: Partial<AuthUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      setStoredUser(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!getToken()) {
@@ -61,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router, logout]);
 
   return (
-    <AuthContext.Provider value={{ user, merchant, loading, logout }}>
+    <AuthContext.Provider value={{ user, merchant, loading, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

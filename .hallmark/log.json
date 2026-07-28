@@ -1,6 +1,58 @@
 [
   {
     "date": "2026-07-27",
+    "scope": "system",
+    "macrostructure": "05 Workbench (app family) — component-scope: DataTable + adoption",
+    "theme": "Cobalt",
+    "theme_axes": "cool-light + cool-dark / grotesk-sans / electric-cobalt",
+    "genre": "modern-minimal",
+    "nav": "unchanged (N3 side-rail + N13 inline ⌘K-pill from the (dashboard) layout)",
+    "footer": "none (dashboard surfaces)",
+    "enrichment": "none — the table is the function",
+    "design_system": "design.md (amended: ## Tables section + MUST-share entry)",
+    "brief": "Consi · one <DataTable> standard for the whole platform — column-driven sort/search/column-visibility/pagination/CSV+Excel+PDF export, no new dependency (xlsx+jspdf already present, now dynamically imported). Adopted across all 15 table surfaces; the 9 still on the legacy token shim (transactions, payouts, disputes, customers, customers/[id], admin/users, admin/gateways, admin/merchants/[id], ops) moved onto Cobalt in the same pass. Deleted the 260-line hardcoded lib/export.ts."
+  },
+  {
+    "date": "2026-07-27",
+    "scope": "page",
+    "macrostructure": "05 Workbench (app family)",
+    "theme": "Cobalt",
+    "theme_axes": "cool-light + cool-dark / grotesk-sans / electric-cobalt",
+    "genre": "modern-minimal",
+    "nav": "N3 side-rail + N13 inline ⌘K-pill (heredado del layout de (dashboard))",
+    "footer": "none (superficie de dashboard)",
+    "enrichment": "none — la función carga la página",
+    "design_system": "design.md",
+    "brief": "Consi · /profile, /admin/profile y /ops/profile — arreglo estructural (la ruta del merchant vivía fuera de (dashboard), sin layout NI AuthProvider, así que el formulario cargaba vacío) + ProfileForm rehecho en Cobalt: readout de identidad, correo y contraseña como dos acciones independientes, updateUser en el contexto en vez de pedir recargar"
+  },
+  {
+    "date": "2026-07-27",
+    "scope": "family",
+    "macrostructure": "04 Stat-Led (focused family)",
+    "theme": "Cobalt",
+    "theme_axes": "cool-light + cool-dark / grotesk-sans / electric-cobalt",
+    "genre": "modern-minimal",
+    "nav": "none — public surfaces carry wordmark + theme toggle only",
+    "footer": "Ft2 inline single line",
+    "enrichment": "none — typography only",
+    "design_system": "design.md (amended: Focused family section + route list)",
+    "brief": "Consi · Focused-family pass — /forgot-password + /reset-password off the legacy shim onto Cobalt (dark mode was broken), plus checkout hardening: browser-side QR encoder replacing the third-party image service, EXPIRED/CANCELLED terminal state, noindex on /c/**, reset token no longer painted outside dev"
+  },
+  {
+    "date": "2026-07-27",
+    "scope": "page",
+    "macrostructure": "04 Stat-Led (focused family)",
+    "theme": "Cobalt",
+    "theme_axes": "cool-light + cool-dark / grotesk-sans / electric-cobalt",
+    "genre": "modern-minimal",
+    "nav": "none — hosted payer surface (wordmark + theme toggle in the order rail)",
+    "footer": "Ft2 inline single line, folded into the order rail's trust block",
+    "enrichment": "none — typography only (graphite deliberately unused; reserved per design.md)",
+    "design_system": "design.md",
+    "brief": "Consi · /c/[token] hosted checkout off the legacy InVū gradient shim onto Cobalt: two-tone order-rail/act-column split, amount as the Stat-Led hero, real <Label> controls, 3-step stepper, accessible 3DS dialog, working dark mode"
+  },
+  {
+    "date": "2026-07-27",
     "scope": "page",
     "macrostructure": "21 Component Playground (docs family)",
     "theme": "Cobalt",

@@ -284,8 +284,9 @@ export const api = {
   },
 
   // ---- Authentication & Profile ----
+  /** `resetToken` is only present in local dev — in a build the token is emailed. */
   forgotPassword: (email: string) =>
-    request<{ resetToken: string }>('/auth/forgot-password', {
+    request<{ ok: true; resetToken?: string }>('/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),

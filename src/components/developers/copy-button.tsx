@@ -13,16 +13,19 @@ export function CopyButton({
   value,
   label,
   className,
+  /** `ghost` for hairline rows, where an outlined box per row would out-shout the rules. */
+  variant = 'outline',
 }: {
   value: string;
   label: string;
   className?: string;
+  variant?: 'outline' | 'ghost';
 }) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
       type="button"
-      variant="outline"
+      variant={variant}
       size="icon"
       className={cn('size-9 shrink-0', className)}
       onClick={() => {

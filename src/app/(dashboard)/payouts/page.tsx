@@ -1,485 +1,480 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { FileSpreadsheet, FileText } from 'lucide-react';
+/* Hallmark · genre: modern-minimal · macrostructure: 05 Workbench
+ * design-system: design.md · theme: Cobalt (light + dark)
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { Column, DataTable } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Notice, PageHead } from '@/components/ui/page-head';
 import { Select } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { StatusBadge } from '@/components/ui/badge';
 import { api } from '@/lib/api-client';
-import { formatMoney, formatDate } from '@/lib/format';
-import { exportPayoutsToExcel, exportPayoutsToPdf } from '@/lib/export';
-import { type BankAccount, type Currency, type Wallet, type Transaction } from '@/lib/types';
+import { formatDate, formatMoney, statusLabel } from '@/lib/format';
+import type { BankAccount, Currency, Transaction, Wallet } from '@/lib/types';
+
+const ACCOUNT_STATUS: Record<BankAccount['status'], { text: string; tone: string }> = {
+  APPROVED: { text: 'Aprobada', tone: 'text-[var(--color-ok)] bg-[var(--color-ok-soft)]' },
+  PENDING: { text: 'Pendiente', tone: 'text-[var(--color-warn)] bg-[var(--color-warn-soft)]' },
+  REJECTED: { text: 'Rechazada', tone: 'text-[var(--color-bad)] bg-[var(--color-bad-soft)]' },
+};
+
+const COLUMNS: Column<Transaction>[] = [
+  {
+    id: 'reference',
+    header: 'Referencia',
+    num: true,
+    align: 'left',
+    value: (t) => t.reference,
+    cell: (t) => (
+      <span className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+        {t.reference.slice(0, 14)}
+      </span>
+    ),
+  },
+  { id: 'currency', header: 'Moneda', num: true, align: 'left', value: (t) => t.currency },
+  {
+    id: 'amount',
+    header: 'Monto',
+    num: true,
+    value: (t) => Number(t.amount),
+    text: (t) => formatMoney(t.amount, t.currency),
+    cell: (t) => <span className="text-[var(--color-ink)]">{formatMoney(t.amount, t.currency)}</span>,
+  },
+  {
+    id: 'fee',
+    header: 'Comisión',
+    num: true,
+    value: (t) => (t.feeAmount ? Number(t.feeAmount) : null),
+    text: (t) => (t.feeAmount ? formatMoney(t.feeAmount, t.currency) : '—'),
+  },
+  {
+    id: 'net',
+    header: 'Neto transferido',
+    num: true,
+    value: (t) => (t.netAmount ? Number(t.netAmount) : null),
+    text: (t) => (t.netAmount ? formatMoney(t.netAmount, t.currency) : '—'),
+  },
+  {
+    id: 'description',
+    header: 'Destino',
+    value: (t) => t.description ?? 'Retiro directo',
+    cell: (t) => (
+      <span className="block max-w-[24ch] truncate text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+        {t.description ?? 'Retiro directo'}
+      </span>
+    ),
+  },
+  {
+    id: 'status',
+    header: 'Estado',
+    value: (t) => t.status,
+    text: (t) => statusLabel(t.status),
+    cell: (t) => <StatusBadge status={t.status} />,
+  },
+  {
+    id: 'createdAt',
+    header: 'Fecha',
+    num: true,
+    value: (t) => t.createdAt,
+    text: (t) => formatDate(t.createdAt),
+    cell: (t) => (
+      <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+        {formatDate(t.createdAt)}
+      </span>
+    ),
+  },
+];
 
 export default function PayoutsPage() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [payoutsList, setPayoutsList] = useState<Transaction[]>([]);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterCurrency, setFilterCurrency] = useState('');
+  const [payouts, setPayouts] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({ status: '', currency: '' });
 
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-
-  const handleExportExcel = async () => {
-    setExportingExcel(true);
-    setExportError(null);
-    try {
-      const params: Record<string, string> = { type: 'PAYOUT', take: '5000' };
-      if (filterStatus) params.status = filterStatus;
-      if (filterCurrency) params.currency = filterCurrency;
-      const data = await api.getTransactions(params);
-      exportPayoutsToExcel(data);
-    } catch (e) {
-      setExportError(e instanceof Error ? e.message : 'Error al exportar a Excel');
-    } finally {
-      setExportingExcel(false);
-    }
-  };
-
-  const handleExportPdf = async () => {
-    setExportingPdf(true);
-    setExportError(null);
-    try {
-      const params: Record<string, string> = { type: 'PAYOUT', take: '5000' };
-      if (filterStatus) params.status = filterStatus;
-      if (filterCurrency) params.currency = filterCurrency;
-      const data = await api.getTransactions(params);
-      exportPayoutsToPdf(data);
-    } catch (e) {
-      setExportError(e instanceof Error ? e.message : 'Error al exportar a PDF');
-    } finally {
-      setExportingPdf(false);
-    }
-  };
-  
-  // Solicitar Retiro Form State
   const [bankAccountId, setBankAccountId] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [payoutMessage, setPayoutMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
-  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutMsg, setPayoutMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [payoutBusy, setPayoutBusy] = useState(false);
 
-  // Registrar Cuenta Bancaria Form State
-  const [regBankName, setRegBankName] = useState('');
-  const [regAccountNumber, setRegAccountNumber] = useState('');
-  const [regAccountHolder, setRegAccountHolder] = useState('');
-  const [regCurrency, setRegCurrency] = useState<Currency>('USD');
-  const [regIsDefault, setRegIsDefault] = useState(false);
-  const [regMessage, setRegMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
-  const [regLoading, setRegLoading] = useState(false);
+  const [reg, setReg] = useState({
+    bankName: '',
+    accountNumber: '',
+    accountHolder: '',
+    currency: 'USD' as Currency,
+    isDefault: false,
+  });
+  const [regMsg, setRegMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [regBusy, setRegBusy] = useState(false);
 
-  const refresh = () =>
-    Promise.all([
-      api.getBankAccounts(),
-      api.getBalances(),
-      api.getTransactions({ type: 'PAYOUT' })
-    ]).then(([a, w, p]) => {
-      setAccounts(a);
-      setWallets(w);
-      setPayoutsList(p);
-      
-      // Auto-select first APPROVED bank account in the payout form
-      const approvedAccounts = a.filter((acc) => acc.status === 'APPROVED');
-      if (approvedAccounts.length > 0) {
-        setBankAccountId((id) => {
-          const stillExists = approvedAccounts.some((acc) => acc.id === id);
-          return stillExists ? id : approvedAccounts[0].id;
-        });
-      } else {
-        setBankAccountId('');
-      }
-    });
+  const params = useMemo(() => {
+    const p: Record<string, string> = { type: 'PAYOUT' };
+    if (filters.status) p.status = filters.status;
+    if (filters.currency) p.currency = filters.currency;
+    return p;
+  }, [filters]);
 
-  useEffect(() => {
-    refresh();
+  const refresh = useCallback(async () => {
+    const [a, w] = await Promise.all([api.getBankAccounts(), api.getBalances()]);
+    setAccounts(a);
+    setWallets(w);
+    const approved = a.filter((acc) => acc.status === 'APPROVED');
+    setBankAccountId((id) =>
+      approved.some((acc) => acc.id === id) ? id : (approved[0]?.id ?? ''),
+    );
   }, []);
 
-  // Fetch payouts list when filters change
   useEffect(() => {
-    const params: Record<string, string> = { type: 'PAYOUT' };
-    if (filterStatus) params.status = filterStatus;
-    if (filterCurrency) params.currency = filterCurrency;
-    api.getTransactions(params)
-      .then(setPayoutsList)
-      .catch(() => {});
-  }, [filterStatus, filterCurrency]);
+    refresh().catch(() => {});
+  }, [refresh]);
 
-  const approvedAccounts = accounts.filter((a) => a.status === 'APPROVED');
-  const selected = approvedAccounts.find((a) => a.id === bankAccountId);
-  const currency: Currency | undefined = selected?.currency;
-  const wallet = wallets.find((w) => w.currency === currency);
+  useEffect(() => {
+    setLoading(true);
+    api
+      .getTransactions(params)
+      .then(setPayouts)
+      .catch(() => setPayouts([]))
+      .finally(() => setLoading(false));
+  }, [params]);
 
-  async function onSubmitPayout(e: React.FormEvent) {
+  const approved = accounts.filter((a) => a.status === 'APPROVED');
+  const selected = approved.find((a) => a.id === bankAccountId);
+  const wallet = wallets.find((w) => w.currency === selected?.currency);
+
+  async function submitPayout(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected || !currency) return;
-    setPayoutMessage(null);
-    setPayoutLoading(true);
+    if (!selected) return;
+    setPayoutMsg(null);
+    setPayoutBusy(true);
     try {
       const trx = await api.createPayout({
-        currency,
+        currency: selected.currency,
         amount,
         bankAccountId,
         description: description || undefined,
-      } as any);
-
-      setPayoutMessage({
+      } as Parameters<typeof api.createPayout>[0]);
+      setPayoutMsg({
         kind: 'ok',
-        text: `Retiro creado (${trx.reference.slice(0, 12)}…) — Estado: ${trx.status}${trx.status === 'PENDING' ? ' (Pendiente de aprobación)' : ''}`,
+        text: `Retiro ${trx.reference.slice(0, 12)}… creado · ${statusLabel(trx.status)}`,
       });
       setAmount('');
       setDescription('');
       await refresh();
+      setPayouts(await api.getTransactions(params));
     } catch (err) {
-      setPayoutMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Error al solicitar el retiro' });
-    } finally {
-      setPayoutLoading(false);
-    }
-  }
-
-  async function onSubmitRegisterBank(e: React.FormEvent) {
-    e.preventDefault();
-    setRegMessage(null);
-    setRegLoading(true);
-    try {
-      await api.addBankAccount({
-        bankName: regBankName,
-        accountNumber: regAccountNumber,
-        accountHolder: regAccountHolder,
-        currency: regCurrency,
-        isDefault: regIsDefault,
+      setPayoutMsg({
+        kind: 'err',
+        text: err instanceof Error ? err.message : 'Error al solicitar el retiro',
       });
-
-      setRegMessage({ kind: 'ok', text: 'Cuenta bancaria registrada con éxito. Pendiente de aprobación por el administrador.' });
-      setRegBankName('');
-      setRegAccountNumber('');
-      setRegAccountHolder('');
-      setRegIsDefault(false);
-      await refresh();
-    } catch (err) {
-      setRegMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Error al registrar la cuenta bancaria' });
     } finally {
-      setRegLoading(false);
+      setPayoutBusy(false);
     }
   }
 
-  async function onSetDefaultAccount(id: string) {
+  async function submitBank(e: React.FormEvent) {
+    e.preventDefault();
+    setRegMsg(null);
+    setRegBusy(true);
     try {
-      await api.setDefaultBankAccount(id);
+      await api.addBankAccount(reg);
+      setRegMsg({
+        kind: 'ok',
+        text: 'Cuenta registrada. Un administrador debe aprobarla antes de usarla.',
+      });
+      setReg({
+        bankName: '',
+        accountNumber: '',
+        accountHolder: '',
+        currency: 'USD',
+        isDefault: false,
+      });
       await refresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al establecer cuenta como principal');
+      setRegMsg({
+        kind: 'err',
+        text: err instanceof Error ? err.message : 'Error al registrar la cuenta',
+      });
+    } finally {
+      setRegBusy(false);
     }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">Liquidaciones y Retiros</h1>
-      </div>
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Retiros"
+        lede="Solicita transferencias a tus cuentas aprobadas y revisa el histórico de dispersiones."
+      />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* LEFT COLUMN: Payout request & Bank Registration */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-[var(--foreground)]">Solicitar retiro</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {approvedAccounts.length === 0 ? (
-                <div className="rounded-md border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--muted-foreground)]">
-                  Debes registrar una cuenta bancaria y esperar que sea aprobada por un administrador antes de solicitar retiros.
+      <div className="grid gap-[var(--space-md)] lg:grid-cols-2">
+        <div className="flex flex-col gap-[var(--space-md)]">
+          <Card className="p-[var(--space-md)]">
+            <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Solicitar retiro</h2>
+            {approved.length === 0 ? (
+              <p className="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-rule)] p-[var(--space-md)] text-center text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                Registra una cuenta bancaria y espera su aprobación antes de solicitar retiros.
+              </p>
+            ) : (
+              <form onSubmit={submitPayout} className="flex flex-col gap-[var(--space-sm)]">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="dest">Cuenta destino</Label>
+                  <Select
+                    id="dest"
+                    value={bankAccountId}
+                    onChange={(e) => setBankAccountId(e.target.value)}
+                    required
+                  >
+                    {approved.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.bankName} · {a.currency} · {a.accountNumber}
+                        {a.isDefault ? ' (principal)' : ''}
+                      </option>
+                    ))}
+                  </Select>
                 </div>
-              ) : (
-                <form onSubmit={onSubmitPayout} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label>Cuenta bancaria destino (Solo aprobadas)</Label>
-                    <Select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} required>
-                      {approvedAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.bankName} · {a.currency} · {a.accountNumber} {a.isDefault ? ' (Principal)' : ''}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Monto ({currency ?? '—'})</Label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      required
-                    />
-                    {wallet ? (
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        Disponible: {formatMoney(wallet.available, wallet.currency)}
-                      </p>
-                    ) : null}
-                  </div>
-                  
-                  <div className="space-y-1.5">
-                    <Label>Descripción (opcional)</Label>
-                    <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ej. Retiro de caja chica" />
-                  </div>
-                  {payoutMessage ? (
-                    <p className={payoutMessage.kind === 'ok' ? 'text-sm text-green-600' : 'text-sm text-[var(--destructive)]'}>
-                      {payoutMessage.text}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="payout-amount">Monto ({selected?.currency ?? '—'})</Label>
+                  <Input
+                    id="payout-amount"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    required
+                    className="num"
+                  />
+                  {wallet ? (
+                    <p className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+                      Disponible{' '}
+                      <span className="num">{formatMoney(wallet.available, wallet.currency)}</span>
                     </p>
                   ) : null}
-                  <Button type="submit" disabled={payoutLoading || !selected}>
-                    {payoutLoading ? 'Procesando…' : 'Solicitar retiro'}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="payout-desc">Descripción (opcional)</Label>
+                  <Input
+                    id="payout-desc"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Retiro de caja chica"
+                  />
+                </div>
+                {payoutMsg ? <Notice kind={payoutMsg.kind}>{payoutMsg.text}</Notice> : null}
+                <div>
+                  <Button type="submit" disabled={payoutBusy || !selected}>
+                    {payoutBusy ? 'Procesando…' : 'Solicitar retiro'}
                   </Button>
-                </form>
-              )}
-            </CardContent>
+                </div>
+              </form>
+            )}
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-[var(--foreground)]">Registrar nueva cuenta bancaria</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={onSubmitRegisterBank} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label>Moneda de la cuenta</Label>
-                    <Select value={regCurrency} onChange={(e) => setRegCurrency(e.target.value as Currency)}>
-                      <option value="USD">USD ($)</option>
-                      <option value="VES">VES (Bs.)</option>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Nombre del Banco</Label>
-                    <Input
-                      type="text"
-                      placeholder="Ej. Bancamiga, Banesco"
-                      value={regBankName}
-                      onChange={(e) => setRegBankName(e.target.value)}
-                      required
-                    />
-                  </div>
+          <Card className="p-[var(--space-md)]">
+            <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">
+              Registrar cuenta bancaria
+            </h2>
+            <form onSubmit={submitBank} className="flex flex-col gap-[var(--space-sm)]">
+              <div className="grid gap-[var(--space-sm)] sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reg-currency">Moneda</Label>
+                  <Select
+                    id="reg-currency"
+                    value={reg.currency}
+                    onChange={(e) => setReg((r) => ({ ...r, currency: e.target.value as Currency }))}
+                  >
+                    <option value="USD">USD</option>
+                    <option value="VES">VES</option>
+                  </Select>
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label>Titular de la cuenta</Label>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reg-bank">Banco</Label>
                   <Input
-                    type="text"
-                    placeholder="Nombre o Razón Social"
-                    value={regAccountHolder}
-                    onChange={(e) => setRegAccountHolder(e.target.value)}
+                    id="reg-bank"
+                    value={reg.bankName}
+                    onChange={(e) => setReg((r) => ({ ...r, bankName: e.target.value }))}
+                    placeholder="Bancamiga, Banesco…"
                     required
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label>Número de cuenta (20 dígitos)</Label>
-                  <Input
-                    type="text"
-                    placeholder="0172..."
-                    value={regAccountNumber}
-                    onChange={(e) => setRegAccountNumber(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2 py-1">
-                  <input
-                    type="checkbox"
-                    id="regIsDefault"
-                    checked={regIsDefault}
-                    onChange={(e) => setRegIsDefault(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--ring)]"
-                  />
-                  <label htmlFor="regIsDefault" className="text-sm font-medium text-[var(--foreground)]">
-                    Establecer como cuenta principal para esta moneda
-                  </label>
-                </div>
-
-                {regMessage ? (
-                  <p className={regMessage.kind === 'ok' ? 'text-sm text-green-600' : 'text-sm text-[var(--destructive)]'}>
-                    {regMessage.text}
-                  </p>
-                ) : null}
-
-                <Button type="submit" disabled={regLoading}>
-                  {regLoading ? 'Registrando…' : 'Registrar cuenta bancaria'}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="reg-holder">Titular</Label>
+                <Input
+                  id="reg-holder"
+                  value={reg.accountHolder}
+                  onChange={(e) => setReg((r) => ({ ...r, accountHolder: e.target.value }))}
+                  placeholder="Nombre o razón social"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="reg-number">Número de cuenta (20 dígitos)</Label>
+                <Input
+                  id="reg-number"
+                  inputMode="numeric"
+                  value={reg.accountNumber}
+                  onChange={(e) => setReg((r) => ({ ...r, accountNumber: e.target.value }))}
+                  placeholder="0172…"
+                  required
+                  className="num"
+                />
+              </div>
+              <label
+                htmlFor="reg-default"
+                className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-sm)] border border-[var(--color-rule)] p-2.5 transition-colors duration-[var(--dur-fast)] hover:border-[var(--color-rule-2)]"
+              >
+                <input
+                  type="checkbox"
+                  id="reg-default"
+                  checked={reg.isDefault}
+                  onChange={(e) => setReg((r) => ({ ...r, isDefault: e.target.checked }))}
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--color-accent)]"
+                />
+                <span className="text-[length:var(--text-sm)] text-[var(--color-ink-2)]">
+                  Cuenta principal para esta moneda
+                </span>
+              </label>
+              {regMsg ? <Notice kind={regMsg.kind}>{regMsg.text}</Notice> : null}
+              <div>
+                <Button type="submit" disabled={regBusy}>
+                  {regBusy ? 'Registrando…' : 'Registrar cuenta'}
                 </Button>
-              </form>
-            </CardContent>
+              </div>
+            </form>
           </Card>
         </div>
 
-        {/* RIGHT COLUMN: Balances & Bank Accounts List */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-[var(--foreground)]">Saldos disponibles</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {wallets.map((w) => (
-                <div key={w.id} className="flex items-center justify-between rounded-md border border-[var(--border)] p-3">
-                  <span className="font-medium text-[var(--foreground)]">{w.currency}</span>
-                  <span className="font-mono text-sm">{formatMoney(w.available, w.currency)}</span>
-                </div>
-              ))}
-            </CardContent>
+        <div className="flex flex-col gap-[var(--space-md)]">
+          <Card className="p-[var(--space-md)]">
+            <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Saldos disponibles</h2>
+            <dl className="flex flex-col gap-1.5">
+              {wallets.length === 0 ? (
+                <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">Sin saldos.</p>
+              ) : (
+                wallets.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[var(--color-rule)] px-3 py-2.5"
+                  >
+                    <dt className="num text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                      {w.currency}
+                    </dt>
+                    <dd className="num text-[length:var(--text-sm)] text-[var(--color-ink)]">
+                      {formatMoney(w.available, w.currency)}
+                    </dd>
+                  </div>
+                ))
+              )}
+            </dl>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-[var(--foreground)]">Mis cuentas bancarias</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {accounts.length === 0 ? (
-                <p className="text-sm text-[var(--muted-foreground)]">No tienes cuentas bancarias registradas.</p>
-              ) : (
-                <div className="divide-y divide-[var(--border)]">
-                  {accounts.map((a) => (
-                    <div key={a.id} className="py-4 first:pt-0 last:pb-0 flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-semibold text-sm text-[var(--foreground)]">{a.bankName}</span>
-                          <span className="text-xs px-2 py-0.5 rounded bg-[var(--muted)] text-[var(--text-body)] font-mono">
-                            {a.currency}
+          <Card className="p-[var(--space-md)]">
+            <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Mis cuentas</h2>
+            {accounts.length === 0 ? (
+              <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                No tienes cuentas registradas.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[var(--color-rule)]">
+                {accounts.map((a) => (
+                  <li key={a.id} className="flex items-start justify-between gap-3 py-2.5 first:pt-0">
+                    <div className="min-w-0">
+                      <p className="flex flex-wrap items-center gap-1.5 text-[length:var(--text-sm)] font-medium text-[var(--color-ink)]">
+                        {a.bankName}
+                        <span className="label">{a.currency}</span>
+                        {a.isDefault ? (
+                          <span className="rounded-[var(--radius-xs)] bg-[var(--color-accent-soft)] px-1.5 py-px font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] uppercase tracking-[var(--tracking-mono-label)] text-[var(--color-accent)]">
+                            Principal
                           </span>
-                          {a.isDefault && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-[var(--accent)] text-[var(--accent-foreground)] font-semibold">
-                              Principal
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-[var(--muted-foreground)] font-mono">{a.accountNumber}</p>
-                        <p className="text-xs text-[var(--muted-foreground)]">Titular: {a.accountHolder}</p>
-                        
-                        {/* Status Badge */}
-                        <div className="pt-1">
-                          {a.status === 'APPROVED' ? (
-                            <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-[var(--success-100)] text-[var(--success-600)]">
-                              Aprobada
-                            </span>
-                          ) : a.status === 'PENDING' ? (
-                            <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-[var(--warning-100)] text-[var(--warning-600)]">
-                              Pendiente de aprobación
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-[var(--danger-100)] text-[var(--danger-600)]">
-                              Rechazada
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      {!a.isDefault && a.status === 'APPROVED' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onSetDefaultAccount(a.id)}
-                          className="text-xs"
-                        >
-                          Hacer principal
-                        </Button>
-                      )}
+                        ) : null}
+                      </p>
+                      <p className="num truncate text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+                        {a.accountNumber}
+                      </p>
+                      <p className="truncate text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                        {a.accountHolder}
+                      </p>
+                      <span
+                        className={`mt-1 inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium uppercase tracking-[var(--tracking-mono-label)] ${ACCOUNT_STATUS[a.status].tone}`}
+                      >
+                        <span className="size-1.5 rounded-full bg-current" aria-hidden />
+                        {ACCOUNT_STATUS[a.status].text}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
+                    {!a.isDefault && a.status === 'APPROVED' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => api.setDefaultBankAccount(a.id).then(refresh)}
+                      >
+                        Hacer principal
+                      </Button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         </div>
       </div>
 
-      {/* HISTORICAL PAYOUTS TABLE CARD */}
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <CardTitle className="text-base font-semibold text-[var(--foreground)]">Historial de retiros</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-[140px] text-xs">
-              <option value="">Todos los estados</option>
-              <option value="PENDING">Pendiente</option>
-              <option value="COMPLETED">Completado</option>
-              <option value="FAILED">Fallido</option>
-            </Select>
-            <Select value={filterCurrency} onChange={(e) => setFilterCurrency(e.target.value)} className="w-[110px] text-xs">
-              <option value="">Monedas</option>
-              <option value="USD">USD</option>
-              <option value="VES">VES</option>
-            </Select>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleExportExcel}
-              disabled={exportingExcel || payoutsList.length === 0}
-              className="gap-2 cursor-pointer text-xs font-semibold"
-            >
-              <FileSpreadsheet size={14} className="text-green-600" />
-              {exportingExcel ? 'Exportando…' : 'Exportar Excel'}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleExportPdf}
-              disabled={exportingPdf || payoutsList.length === 0}
-              className="gap-2 cursor-pointer text-xs font-semibold"
-            >
-              <FileText size={14} className="text-red-500" />
-              {exportingPdf ? 'Exportando…' : 'Exportar PDF'}
-            </Button>
-          </div>
-        </CardHeader>
-        {exportError ? <p className="text-sm text-[var(--destructive)] px-6 pb-2">{exportError}</p> : null}
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Referencia</TableHead>
-                <TableHead>Monto</TableHead>
-                <TableHead>Comisión</TableHead>
-                <TableHead>Neto</TableHead>
-                <TableHead>Destino</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payoutsList.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-[var(--muted-foreground)] py-6">
-                    No hay retiros registrados
-                  </TableCell>
-                </TableRow>
-              ) : (
-                payoutsList.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="font-mono text-xs">{t.reference.slice(0, 14)}</TableCell>
-                    <TableCell>{formatMoney(t.amount, t.currency)}</TableCell>
-                    <TableCell className="text-[var(--muted-foreground)]">
-                      {t.feeAmount ? formatMoney(t.feeAmount, t.currency) : '—'}
-                    </TableCell>
-                    <TableCell>{t.netAmount ? formatMoney(t.netAmount, t.currency) : '—'}</TableCell>
-                    <TableCell className="text-xs text-[var(--muted-foreground)] max-w-xs truncate">
-                      {t.description ?? 'Retiro directo'}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={t.status} />
-                    </TableCell>
-                    <TableCell className="text-[var(--muted-foreground)] text-xs">
-                      {formatDate(t.createdAt)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
+      <Card className="p-[var(--space-md)]">
+        <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Historial de retiros</h2>
+        <DataTable
+          id="payouts"
+          caption="Historial de retiros"
+          columns={COLUMNS}
+          rows={payouts}
+          rowKey={(t) => t.id}
+          loading={loading}
+          empty="No hay retiros registrados."
+          searchPlaceholder="Buscar por referencia o destino…"
+          defaultSort={{ id: 'createdAt', dir: 'desc' }}
+          exportFilename="retiros_consi"
+          exportAll={() => api.getTransactions({ ...params, take: '5000' })}
+          exportSummary={(data) => [
+            `Retirado USD ${formatMoney(
+              data.filter((t) => t.currency === 'USD').reduce((s, t) => s + Number(t.amount || 0), 0),
+              'USD',
+            )}`,
+            `Retirado VES ${formatMoney(
+              data.filter((t) => t.currency === 'VES').reduce((s, t) => s + Number(t.amount || 0), 0),
+              'VES',
+            )}`,
+          ]}
+          toolbar={
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                aria-label="Filtrar por estado"
+                value={filters.status}
+                onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+                className="h-9 w-auto"
+              >
+                <option value="">Todos los estados</option>
+                <option value="PENDING">Pendiente</option>
+                <option value="COMPLETED">Completado</option>
+                <option value="FAILED">Fallido</option>
+              </Select>
+              <Select
+                aria-label="Filtrar por moneda"
+                value={filters.currency}
+                onChange={(e) => setFilters((f) => ({ ...f, currency: e.target.value }))}
+                className="h-9 w-auto"
+              >
+                <option value="">Todas las monedas</option>
+                <option value="USD">USD</option>
+                <option value="VES">VES</option>
+              </Select>
+            </div>
+          }
+        />
       </Card>
     </div>
   );
 }
-

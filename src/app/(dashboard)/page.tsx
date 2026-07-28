@@ -7,11 +7,55 @@ import { CurrencyHero } from '@/components/dashboard/currency-hero';
 import { WeeklyChart } from '@/components/dashboard/weekly-chart';
 import { StatusBadge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Column, DataTable } from '@/components/ui/data-table';
 import { Notice, PageHead } from '@/components/ui/page-head';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
-import { formatDate, formatMoney, typeLabel } from '@/lib/format';
+import { formatDate, formatMoney, statusLabel, typeLabel } from '@/lib/format';
 import type { ExchangeRate, Transaction, Wallet } from '@/lib/types';
+
+const RECENT_COLUMNS: Column<Transaction>[] = [
+  {
+    id: 'type',
+    header: 'Tipo',
+    value: (t) => t.type,
+    text: (t) => typeLabel(t.type),
+    cell: (t) => <span className="text-[var(--color-ink)]">{typeLabel(t.type)}</span>,
+  },
+  {
+    id: 'amount',
+    header: 'Monto',
+    num: true,
+    value: (t) => Number(t.amount),
+    text: (t) => formatMoney(t.amount, t.currency),
+    cell: (t) => <span className="text-[var(--color-ink)]">{formatMoney(t.amount, t.currency)}</span>,
+  },
+  {
+    id: 'usd',
+    header: 'USD equiv.',
+    num: true,
+    value: (t) => (t.usdEquivalent ? Number(t.usdEquivalent) : null),
+    text: (t) => (t.usdEquivalent ? formatMoney(t.usdEquivalent, 'USD') : '—'),
+  },
+  {
+    id: 'status',
+    header: 'Estado',
+    value: (t) => t.status,
+    text: (t) => statusLabel(t.status),
+    cell: (t) => <StatusBadge status={t.status} />,
+  },
+  {
+    id: 'createdAt',
+    header: 'Fecha',
+    num: true,
+    value: (t) => t.createdAt,
+    text: (t) => formatDate(t.createdAt),
+    cell: (t) => (
+      <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+        {formatDate(t.createdAt)}
+      </span>
+    ),
+  },
+];
 
 export default function DashboardPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -130,45 +174,27 @@ export default function DashboardPage() {
       </div>
 
       <Card className="p-[var(--space-md)]">
-        <h2 className="mb-[var(--space-sm)] text-[length:var(--text-md)]">Últimas transacciones</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tipo</TableHead>
-              <TableHead className="text-right">Monto</TableHead>
-              <TableHead className="text-right">USD equiv.</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Fecha</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transactions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-[var(--space-lg)] text-center text-[var(--color-ink-3)]">
-                  Sin transacciones.
-                </TableCell>
-              </TableRow>
-            ) : (
-              transactions.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="text-[var(--color-ink)]">{typeLabel(t.type)}</TableCell>
-                  <TableCell className="num text-right text-[var(--color-ink)]">
-                    {formatMoney(t.amount, t.currency)}
-                  </TableCell>
-                  <TableCell className="num text-right">
-                    {t.usdEquivalent ? formatMoney(t.usdEquivalent, 'USD') : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={t.status} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-right text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
-                    {formatDate(t.createdAt)}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        <div className="mb-[var(--space-sm)] flex items-baseline justify-between gap-[var(--space-sm)]">
+          <h2 className="text-[length:var(--text-md)]">Últimas transacciones</h2>
+          <Link
+            href="/transactions"
+            className="text-[length:var(--text-sm)] text-[var(--color-accent)] underline-offset-4 hover:underline"
+          >
+            Ver todas
+          </Link>
+        </div>
+        {/* A five-row summary: sortable, but a search field and an export menu
+            would be noise. The full surface is one click away. */}
+        <DataTable
+          id="dashboard-recent"
+          caption="Últimas transacciones"
+          columns={RECENT_COLUMNS}
+          rows={transactions}
+          rowKey={(t) => t.id}
+          empty="Sin transacciones."
+          searchable={false}
+          exportable={false}
+        />
       </Card>
     </div>
   );

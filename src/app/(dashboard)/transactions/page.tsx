@@ -1,91 +1,74 @@
 'use client';
 
+/* Hallmark · genre: modern-minimal · macrostructure: 05 Workbench
+ * design-system: design.md · theme: Cobalt (light + dark)
+ * The reference DataTable surface: server filters in the toolbar, client sort,
+ * search, column visibility and export over the loaded set.
+ */
+
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
-import { FileSpreadsheet, FileText } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { Column, DataTable } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Notice, PageHead } from '@/components/ui/page-head';
 import { Select } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api-client';
-import { formatDate, formatMoney } from '@/lib/format';
-import { exportTransactionsToExcel, exportTransactionsToPdf } from '@/lib/export';
+import { formatDate, formatMoney, statusLabel } from '@/lib/format';
 import type { Transaction } from '@/lib/types';
+
+const EMPTY_FILTERS = { status: '', currency: '', from: '', to: '' };
+
+/** Server-side filters travel as query params; the DataTable filters on top of the result. */
+function toParams(filters: typeof EMPTY_FILTERS, extra: Record<string, string> = {}) {
+  const params: Record<string, string> = { type: 'PAYIN', ...extra };
+  if (filters.status) params.status = filters.status;
+  if (filters.currency) params.currency = filters.currency;
+  if (filters.from) params.from = new Date(filters.from).toISOString();
+  if (filters.to) params.to = new Date(filters.to).toISOString();
+  return params;
+}
+
+function sumBy(rows: Transaction[], currency: string): number {
+  return rows
+    .filter((t) => t.currency === currency)
+    .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+}
 
 export default function TransactionsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState({ status: '', currency: '', from: '', to: '' });
-
-  const [exportingExcel, setExportingExcel] = useState(false);
-  const [exportingPdf, setExportingPdf] = useState(false);
-
-  const handleExportExcel = async () => {
-    setExportingExcel(true);
-    setError(null);
-    try {
-      const params: Record<string, string> = { type: 'PAYIN', take: '5000' };
-      if (filters.status) params.status = filters.status;
-      if (filters.currency) params.currency = filters.currency;
-      if (filters.from) params.from = new Date(filters.from).toISOString();
-      if (filters.to) params.to = new Date(filters.to).toISOString();
-      const data = await api.getTransactions(params);
-      exportTransactionsToExcel(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al exportar a Excel');
-    } finally {
-      setExportingExcel(false);
-    }
-  };
-
-  const handleExportPdf = async () => {
-    setExportingPdf(true);
-    setError(null);
-    try {
-      const params: Record<string, string> = { type: 'PAYIN', take: '5000' };
-      if (filters.status) params.status = filters.status;
-      if (filters.currency) params.currency = filters.currency;
-      if (filters.from) params.from = new Date(filters.from).toISOString();
-      if (filters.to) params.to = new Date(filters.to).toISOString();
-      const data = await api.getTransactions(params);
-      exportTransactionsToPdf(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al exportar a PDF');
-    } finally {
-      setExportingPdf(false);
-    }
-  };
-
-  const [refundingTx, setRefundingTx] = useState<Transaction | null>(null);
-  const [customRefundAmount, setCustomRefundAmount] = useState<string>('');
-  const [isPartial, setIsPartial] = useState<boolean>(false);
-  const [refundError, setRefundError] = useState<string | null>(null);
-  const [refundSubmitting, setRefundSubmitting] = useState<boolean>(false);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [refunding, setRefunding] = useState<Transaction | null>(null);
 
   const load = useCallback(() => {
-    const params: Record<string, string> = { type: 'PAYIN' };
-    if (filters.status) params.status = filters.status;
-    if (filters.currency) params.currency = filters.currency;
-    if (filters.from) params.from = new Date(filters.from).toISOString();
-    if (filters.to) params.to = new Date(filters.to).toISOString();
-    api.getTransactions(params).then(setRows).catch((e) =>
-      setError(e instanceof Error ? e.message : 'Error'),
-    );
+    setLoading(true);
+    api
+      .getTransactions(toParams(filters))
+      .then((data) => {
+        setRows(data);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Error'))
+      .finally(() => setLoading(false));
   }, [filters]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const set = (k: keyof typeof filters) => (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) =>
-    setFilters((f) => ({ ...f, [k]: e.target.value }));
-
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const set =
+    (k: keyof typeof filters) => (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) =>
+      setFilters((f) => ({ ...f, [k]: e.target.value }));
 
   const runAction = useCallback(
-    async (id: string, action: (id: string) => Promise<Transaction>, confirmMsg?: string) => {
-      if (confirmMsg && !window.confirm(confirmMsg)) return;
+    async (id: string, action: (id: string) => Promise<Transaction>, confirmMsg: string) => {
+      if (!window.confirm(confirmMsg)) return;
       setBusyId(id);
       setError(null);
       try {
@@ -100,309 +83,403 @@ export default function TransactionsPage() {
     [load],
   );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Transacciones</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleExportExcel}
-            disabled={exportingExcel || rows.length === 0}
-            className="gap-2 cursor-pointer text-xs font-semibold"
-          >
-            <FileSpreadsheet size={14} className="text-green-600" />
-            {exportingExcel ? 'Exportando…' : 'Exportar Excel'}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleExportPdf}
-            disabled={exportingPdf || rows.length === 0}
-            className="gap-2 cursor-pointer text-xs font-semibold"
-          >
-            <FileText size={14} className="text-red-500" />
-            {exportingPdf ? 'Exportando…' : 'Exportar PDF'}
-          </Button>
-        </div>
-      </div>
+  const columns = useMemo<Column<Transaction>[]>(
+    () => [
+      {
+        id: 'reference',
+        header: 'Referencia',
+        num: true,
+        align: 'left',
+        value: (t) => t.reference,
+        cell: (t) => (
+          <span className="text-[length:var(--text-xs)] text-[var(--color-ink-3)]">
+            {t.reference.slice(0, 14)}
+          </span>
+        ),
+      },
+      {
+        id: 'customer',
+        header: 'Cliente',
+        value: (t) => t.customerName ?? '',
+        cell: (t) =>
+          t.customerId ? (
+            <Link
+              href={`/customers/${t.customerId}`}
+              className="text-[var(--color-accent)] underline-offset-4 hover:underline"
+            >
+              {t.customerName ?? 'Ver cliente'}
+            </Link>
+          ) : (
+            <span className="text-[var(--color-ink-3)]">{t.customerName ?? '—'}</span>
+          ),
+      },
+      {
+        id: 'provider',
+        header: 'Pasarela',
+        value: (t) => t.provider ?? '',
+        cell: (t) => <span className="text-[var(--color-ink-3)]">{t.provider ?? '—'}</span>,
+      },
+      { id: 'currency', header: 'Moneda', num: true, align: 'left', value: (t) => t.currency },
+      {
+        id: 'amount',
+        header: 'Monto',
+        num: true,
+        value: (t) => Number(t.amount),
+        text: (t) => formatMoney(t.amount, t.currency),
+        cell: (t) => (
+          <span className="text-[var(--color-ink)]">{formatMoney(t.amount, t.currency)}</span>
+        ),
+      },
+      {
+        id: 'fee',
+        header: 'Comisión',
+        num: true,
+        value: (t) => (t.feeAmount ? Number(t.feeAmount) : null),
+        text: (t) => (t.feeAmount ? formatMoney(t.feeAmount, t.currency) : '—'),
+        cell: (t) => (
+          <span className="text-[var(--color-ink-3)]">
+            {t.feeAmount ? formatMoney(t.feeAmount, t.currency) : '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'net',
+        header: 'Neto',
+        num: true,
+        value: (t) => (t.netAmount ? Number(t.netAmount) : null),
+        text: (t) => (t.netAmount ? formatMoney(t.netAmount, t.currency) : '—'),
+      },
+      {
+        id: 'refunded',
+        header: 'Reembolsado',
+        num: true,
+        defaultHidden: true,
+        value: (t) => (t.refundedAmount ? Number(t.refundedAmount) : null),
+        text: (t) => (t.refundedAmount ? formatMoney(t.refundedAmount, t.currency) : '—'),
+        cell: (t) =>
+          t.refundedAmount && Number(t.refundedAmount) > 0 ? (
+            <span className="text-[var(--color-bad)]">
+              {formatMoney(t.refundedAmount, t.currency)}
+            </span>
+          ) : (
+            '—'
+          ),
+      },
+      {
+        id: 'usd',
+        header: 'USD equiv.',
+        num: true,
+        defaultHidden: true,
+        value: (t) => (t.usdEquivalent ? Number(t.usdEquivalent) : null),
+        text: (t) => (t.usdEquivalent ? formatMoney(t.usdEquivalent, 'USD') : '—'),
+      },
+      {
+        id: 'status',
+        header: 'Estado',
+        value: (t) => t.status,
+        text: (t) => statusLabel(t.status),
+        cell: (t) => <StatusBadge status={t.status} />,
+      },
+      {
+        id: 'createdAt',
+        header: 'Fecha',
+        num: true,
+        value: (t) => t.createdAt,
+        text: (t) => formatDate(t.createdAt),
+        cell: (t) => (
+          <span className="whitespace-nowrap text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+            {formatDate(t.createdAt)}
+          </span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Acciones',
+        align: 'right',
+        pinned: true,
+        sortable: false,
+        searchable: false,
+        exportable: false,
+        cell: (t) => (
+          <div className="flex justify-end gap-1.5">
+            {/* Pending pay-ins are settled by the gateway webhook, not the merchant. */}
+            {t.status === 'AUTHORIZED' ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busyId === t.id}
+                  onClick={() =>
+                    runAction(t.id, api.captureTransaction, '¿Capturar los fondos de esta transacción?')
+                  }
+                >
+                  Capturar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={busyId === t.id}
+                  onClick={() =>
+                    runAction(t.id, api.voidTransaction, '¿Anular la autorización de esta transacción?')
+                  }
+                >
+                  Anular
+                </Button>
+              </>
+            ) : null}
+            {t.status === 'COMPLETED' && t.type === 'PAYIN' ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busyId === t.id}
+                  onClick={() => setRefunding(t)}
+                >
+                  Reembolsar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={busyId === t.id}
+                  onClick={() =>
+                    runAction(
+                      t.id,
+                      api.chargebackTransaction,
+                      '¿Registrar contracargo de esta transacción?',
+                    )
+                  }
+                >
+                  Contracargo
+                </Button>
+              </>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [busyId, runAction],
+  );
 
-      <Card>
-        <CardHeader><CardTitle className="text-base font-semibold text-[var(--foreground)]">Filtros</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label>Estado</Label>
-              <Select value={filters.status} onChange={set('status')}>
-                <option value="">Todos</option>
+  return (
+    <div className="flex flex-col gap-[var(--space-md)]">
+      <PageHead
+        title="Transacciones"
+        lede="Cada pago entrante, con su comisión, su neto y las acciones que aún admite."
+      />
+
+      <Card className="p-[var(--space-md)]">
+        <DataTable
+          id="transactions"
+          caption="Transacciones"
+          columns={columns}
+          rows={rows}
+          rowKey={(t) => t.id}
+          loading={loading}
+          error={error}
+          empty="Sin transacciones para estos filtros."
+          searchPlaceholder="Buscar por referencia, cliente o pasarela…"
+          defaultSort={{ id: 'createdAt', dir: 'desc' }}
+          exportFilename="transacciones_consi"
+          // The list endpoint is capped; an export should not be.
+          exportAll={() => api.getTransactions(toParams(filters, { take: '5000' }))}
+          exportSummary={(data) => [
+            `Bruto USD ${formatMoney(sumBy(data, 'USD'), 'USD')}`,
+            `Bruto VES ${formatMoney(sumBy(data, 'VES'), 'VES')}`,
+          ]}
+          toolbar={
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                aria-label="Filtrar por estado"
+                value={filters.status}
+                onChange={set('status')}
+                className="h-9 w-auto"
+              >
+                <option value="">Todos los estados</option>
                 <option value="PENDING">Pendiente</option>
+                <option value="AUTHORIZED">Autorizado</option>
                 <option value="COMPLETED">Completado</option>
                 <option value="FAILED">Fallido</option>
                 <option value="REFUNDED">Reembolsado</option>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Moneda</Label>
-              <Select value={filters.currency} onChange={set('currency')}>
-                <option value="">Todas</option>
+              <Select
+                aria-label="Filtrar por moneda"
+                value={filters.currency}
+                onChange={set('currency')}
+                className="h-9 w-auto"
+              >
+                <option value="">Todas las monedas</option>
                 <option value="USD">USD</option>
                 <option value="VES">VES</option>
               </Select>
+              <Input
+                type="date"
+                aria-label="Desde"
+                title="Desde"
+                value={filters.from}
+                onChange={set('from')}
+                className="w-auto"
+              />
+              <Input
+                type="date"
+                aria-label="Hasta"
+                title="Hasta"
+                value={filters.to}
+                onChange={set('to')}
+                className="w-auto"
+              />
             </div>
-            <div className="space-y-1.5">
-              <Label>Desde</Label>
-              <Input type="date" value={filters.from} onChange={set('from')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Hasta</Label>
-              <Input type="date" value={filters.to} onChange={set('to')} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {error ? <p className="text-sm text-[var(--destructive)]">{error}</p> : null}
-
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Referencia</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Gateway</TableHead>
-                <TableHead>Monto</TableHead>
-                <TableHead>Comisión</TableHead>
-                <TableHead>Neto</TableHead>
-                <TableHead>Reembolsado</TableHead>
-                <TableHead>USD equiv.</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 ? (
-                <TableRow><TableCell className="text-[var(--muted-foreground)]">Sin resultados</TableCell></TableRow>
-              ) : rows.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="font-mono text-xs">{t.reference.slice(0, 14)}</TableCell>
-                  <TableCell>
-                    {t.customerId ? (
-                      <Link
-                        href={`/customers/${t.customerId}`}
-                        className="font-medium text-[var(--blue-700)] hover:underline"
-                      >
-                        {t.customerName ?? 'Ver cliente'}
-                      </Link>
-                    ) : (
-                      <span className="text-[var(--muted-foreground)]">{t.customerName ?? '—'}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[var(--muted-foreground)]">{t.provider ?? '—'}</TableCell>
-                  <TableCell>{formatMoney(t.amount, t.currency)}</TableCell>
-                  <TableCell className="text-[var(--muted-foreground)]">
-                    {t.feeAmount ? formatMoney(t.feeAmount, t.currency) : '—'}
-                  </TableCell>
-                  <TableCell>{t.netAmount ? formatMoney(t.netAmount, t.currency) : '—'}</TableCell>
-                  <TableCell className="text-[var(--destructive)]">
-                    {t.refundedAmount && Number(t.refundedAmount) > 0 ? formatMoney(t.refundedAmount, t.currency) : '—'}
-                  </TableCell>
-                  <TableCell>{t.usdEquivalent ? formatMoney(t.usdEquivalent, 'USD') : '—'}</TableCell>
-                  <TableCell><StatusBadge status={t.status} /></TableCell>
-                  <TableCell className="text-[var(--muted-foreground)]">{formatDate(t.createdAt)}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      {/* Pagos pendientes los liquida la pasarela/webhook, no el comercio. */}
-                      {t.status === 'AUTHORIZED' ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busyId === t.id}
-                            onClick={() =>
-                              runAction(t.id, api.captureTransaction, '¿Capturar los fondos de esta transacción?')
-                            }
-                          >
-                            Capturar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={busyId === t.id}
-                            onClick={() =>
-                              runAction(t.id, api.voidTransaction, '¿Anular la autorización de esta transacción?')
-                            }
-                          >
-                            Anular
-                          </Button>
-                        </>
-                      ) : null}
-                      {t.status === 'COMPLETED' && t.type === 'PAYIN' ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busyId === t.id}
-                            onClick={() => {
-                              setRefundingTx(t);
-                              setCustomRefundAmount('');
-                              setIsPartial(false);
-                              setRefundError(null);
-                            }}
-                          >
-                            Reembolsar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={busyId === t.id}
-                            onClick={() =>
-                              runAction(
-                                t.id,
-                                api.chargebackTransaction,
-                                '¿Registrar contracargo de esta transacción?',
-                              )
-                            }
-                          >
-                            Contracargo
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Modal de Reembolsos */}
-      {refundingTx && (() => {
-        const net = Number(refundingTx.netAmount ?? refundingTx.amount);
-        const refunded = Number(refundingTx.refundedAmount ?? 0);
-        const remaining = net - refunded;
-
-        const handleRefundSubmit = async (e: React.FormEvent) => {
-          e.preventDefault();
-          setRefundError(null);
-          setRefundSubmitting(true);
-          try {
-            const amountToSend = isPartial ? customRefundAmount : undefined;
-            if (isPartial) {
-              const numAmount = Number(customRefundAmount);
-              if (isNaN(numAmount) || numAmount <= 0) {
-                throw new Error('Monto inválido');
-              }
-              if (numAmount > remaining) {
-                throw new Error('El monto supera el disponible restante para reembolsar');
-              }
-            }
-            await api.refundTransaction(refundingTx.id, amountToSend);
-            setRefundingTx(null);
-            load();
-          } catch (err) {
-            setRefundError(err instanceof Error ? err.message : 'Error al procesar el reembolso');
-          } finally {
-            setRefundSubmitting(false);
           }
-        };
+        />
+      </Card>
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <Card className="w-full max-w-md p-6 bg-white border border-[var(--border)] shadow-[var(--shadow-lg)]">
-              <CardHeader className="p-0 mb-4">
-                <CardTitle className="text-lg font-bold text-[var(--text-strong)]">Reembolsar Transacción</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 space-y-4">
-                <p className="text-xs text-[var(--text-muted)] font-mono mb-2">
-                  Ref: {refundingTx.reference}
-                </p>
+      {refunding ? (
+        <RefundDialog
+          transaction={refunding}
+          onClose={() => setRefunding(null)}
+          onDone={() => {
+            setRefunding(null);
+            load();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
 
-                <div className="grid grid-cols-3 gap-2 bg-[var(--ink-50)] p-3 rounded-md text-xs font-semibold text-center">
-                  <div>
-                    <div className="text-[var(--text-subtle)] text-[10px] uppercase">Neto Original</div>
-                    <div className="text-[var(--text-strong)] mt-0.5">{formatMoney(net.toString(), refundingTx.currency)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-subtle)] text-[10px] uppercase">Reembolsado</div>
-                    <div className="text-[var(--text-strong)] mt-0.5">{formatMoney(refunded.toString(), refundingTx.currency)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-subtle)] text-[10px] uppercase">Restante</div>
-                    <div className="text-[var(--text-strong)] mt-0.5">{formatMoney(remaining.toString(), refundingTx.currency)}</div>
-                  </div>
-                </div>
+function RefundDialog({
+  transaction,
+  onClose,
+  onDone,
+}: {
+  transaction: Transaction;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [partial, setPartial] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-                <form onSubmit={handleRefundSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold">Tipo de Reembolso</Label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-sm text-[var(--text-body)] cursor-pointer">
-                        <input
-                          type="radio"
-                          name="refundType"
-                          checked={!isPartial}
-                          onChange={() => setIsPartial(false)}
-                          className="accent-[var(--primary)]"
-                        />
-                        <span>Total ({formatMoney(remaining.toString(), refundingTx.currency)})</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-[var(--text-body)] cursor-pointer">
-                        <input
-                          type="radio"
-                          name="refundType"
-                          checked={isPartial}
-                          onChange={() => setIsPartial(true)}
-                          className="accent-[var(--primary)]"
-                        />
-                        <span>Parcial</span>
-                      </label>
-                    </div>
-                  </div>
+  const net = Number(transaction.netAmount ?? transaction.amount);
+  const refunded = Number(transaction.refundedAmount ?? 0);
+  const remaining = net - refunded;
 
-                  {isPartial && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Monto a Reembolsar ({refundingTx.currency})</Label>
-                      <Input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0.00"
-                        value={customRefundAmount}
-                        onChange={(e) => setCustomRefundAmount(e.target.value)}
-                        required
-                        className="w-full"
-                      />
-                    </div>
-                  )}
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-                  {refundError && (
-                    <p className="text-xs text-[var(--destructive)] font-medium bg-[var(--danger-100)] p-2 rounded-md">
-                      {refundError}
-                    </p>
-                  )}
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      if (partial) {
+        const value = Number(amount);
+        if (!Number.isFinite(value) || value <= 0) throw new Error('Monto inválido');
+        if (value > remaining) throw new Error('El monto supera el disponible para reembolsar');
+      }
+      await api.refundTransaction(transaction.id, partial ? amount : undefined);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al procesar el reembolso');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-                  <div className="flex justify-end gap-3.5 pt-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={refundSubmitting}
-                      onClick={() => setRefundingTx(null)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={refundSubmitting}>
-                      {refundSubmitting ? 'Procesando…' : 'Reembolsar'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+  const figures = [
+    { label: 'Neto original', value: net },
+    { label: 'Reembolsado', value: refunded },
+    { label: 'Restante', value: remaining },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-scrim)] p-[var(--space-sm)]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="refund-title"
+        className="w-full max-w-md p-[var(--space-md)]"
+      >
+        <h2 id="refund-title" className="text-[length:var(--text-md)]">
+          Reembolsar transacción
+        </h2>
+        <p className="num mt-1 text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+          {transaction.reference}
+        </p>
+
+        <dl className="mt-[var(--space-sm)] grid grid-cols-3 gap-px overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-rule)] bg-[var(--color-rule)]">
+          {figures.map((f) => (
+            <div key={f.label} className="bg-[var(--color-surface)] p-2.5 text-center">
+              <dt className="label">{f.label}</dt>
+              <dd className="num mt-1 text-[length:var(--text-sm)] text-[var(--color-ink)]">
+                {formatMoney(f.value, transaction.currency)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        <form onSubmit={submit} className="mt-[var(--space-sm)] flex flex-col gap-[var(--space-sm)]">
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="label mb-1.5">Tipo de reembolso</legend>
+            <div className="flex flex-wrap gap-4">
+              {[
+                { on: false, text: `Total (${formatMoney(remaining, transaction.currency)})` },
+                { on: true, text: 'Parcial' },
+              ].map((opt) => (
+                <label
+                  key={String(opt.on)}
+                  className="flex cursor-pointer items-center gap-2 text-[length:var(--text-sm)] text-[var(--color-ink-2)]"
+                >
+                  <input
+                    type="radio"
+                    name="refundType"
+                    checked={partial === opt.on}
+                    onChange={() => setPartial(opt.on)}
+                    className="size-4 accent-[var(--color-accent)]"
+                  />
+                  {opt.text}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {partial ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="refund-amount">Monto a reembolsar ({transaction.currency})</Label>
+              <Input
+                id="refund-amount"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+                className="num"
+              />
+            </div>
+          ) : null}
+
+          {error ? <Notice kind="err">{error}</Notice> : null}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Procesando…' : 'Reembolsar'}
+            </Button>
           </div>
-        );
-      })()}
+        </form>
+      </Card>
     </div>
   );
 }
