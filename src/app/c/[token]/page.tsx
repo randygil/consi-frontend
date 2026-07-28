@@ -93,7 +93,20 @@ export default function CheckoutPage() {
     // link can be paid again — we don't jump straight to the confirmed screen.
     checkoutApi
       .get(token)
-      .then(setData)
+      .then((payload) => {
+        setData(payload);
+        // Pre-fill from whatever the merchant already knew about the payer. Only
+        // fills blanks: if the shopper has started typing, their input wins.
+        if (payload.payer) {
+          const p = payload.payer;
+          setCustomer((current) => ({
+            firstName: current.firstName || p.firstName || '',
+            lastName: current.lastName || p.lastName || '',
+            email: current.email || p.email || '',
+            cedula: current.cedula || p.cedula || '',
+          }));
+        }
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Error'));
   }, [token]);
 

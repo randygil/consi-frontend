@@ -218,6 +218,16 @@ export interface CheckoutData {
   status: CheckoutSessionStatus;
   successUrl: string | null;
   reference: string | null;
+  /**
+   * Payer details the merchant already collected when it opened the session, so
+   * the form can open filled in rather than asking the shopper to type them a
+   * second time. Null when the integration sent none.
+   *
+   * Prefill only — the payer is still registered when the rail is picked, so a
+   * prefill without a cédula is normal and the cédula field stays required for
+   * rails that settle in bolívares.
+   */
+  payer: Partial<Record<'firstName' | 'lastName' | 'email' | 'cedula', string>> | null;
 }
 
 export interface InstructionField {
