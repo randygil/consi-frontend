@@ -12,6 +12,7 @@ import {
   Link2,
   Receipt,
   ShieldAlert,
+  Store,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -22,7 +23,8 @@ import { cn } from '@/lib/utils';
 
 export const MERCHANT_NAV = [
   { href: '/', label: 'Panel', icon: LayoutDashboard, keywords: 'resumen dashboard inicio' },
-  { href: '/links', label: 'Links de pago', icon: Link2, keywords: 'cobrar checkout payment links' },
+  { href: '/terminals', label: 'Terminales', icon: Store, keywords: 'punto de venta pos canal app movil tienda contabilidad' },
+  { href: '/links', label: 'Links de pago', icon: Link2, keywords: 'cobrar checkout sesiones' },
   { href: '/methods', label: 'Métodos de pago', icon: CreditCard, keywords: 'pago movil zelle usdt tarjeta' },
   { href: '/transactions', label: 'Cobros', icon: ArrowLeftRight, keywords: 'pagos movimientos transacciones' },
   { href: '/customers', label: 'Clientes', icon: Users, keywords: 'customers pagadores cedula' },

@@ -119,7 +119,7 @@ const ENDPOINTS: EndpointMeta[] = [
   {
     id: 'paymentLink',
     method: 'POST',
-    path: '/payment/links',
+    path: '/payment/sessions',
     title: 'Crear link de pago',
     summary:
       'Genera programáticamente un enlace de pago alojado (Hosted Checkout) y devuelve su URL y token.',
@@ -541,7 +541,7 @@ echo $response;
     },
 
     paymentLink: {
-      curl: `curl -X POST ${base}/payment/links \\
+      curl: `curl -X POST ${base}/payment/sessions \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${apiKey}" \\
   -H "x-signature: FIRMA_HMAC_CALCULADA" \\
@@ -555,7 +555,7 @@ echo $response;
   }'`,
       js: `${linkSign.js}
 
-fetch('${base}/payment/links', {
+fetch('${base}/payment/sessions', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -582,11 +582,11 @@ body = {
     "successUrl": "https://mi-tienda.com/success"
 }
 
-response = requests.post("${base}/payment/links", json=body, headers=headers)
+response = requests.post("${base}/payment/sessions", json=body, headers=headers)
 print(response.json())`,
       php: `${linkSign.php}
 
-$ch = curl_init('${base}/payment/links');
+$ch = curl_init('${base}/payment/sessions');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -811,7 +811,7 @@ if (hash_equals($expected, $signature)) {
 
 <script>
   document.getElementById('pay').addEventListener('click', () => {
-    // El token lo generas en tu backend (POST /payment/links)
+    // El token lo generas en tu backend (POST /payment/sessions)
     Consi.checkout({
       token: 'link_xyz123',
       onSuccess: (data) => {
@@ -1222,8 +1222,8 @@ function SdkPlayground({ origin }: { origin: string }) {
       const Consi = (window as unknown as { Consi: any }).Consi;
 
       if (mode === 'live') {
-        log('Creando link de pago real vía POST /payment/links…');
-        const link = await api.createPaymentLink({
+        log('Abriendo sesión de checkout real vía POST /checkout-sessions…');
+        const link = await api.createCheckoutSession({
           amount,
           currency,
           description,
@@ -1869,7 +1869,7 @@ if (res.token) {
                 </Step>
                 <Step n={2} title="Genera el token en tu backend">
                   <p className="mt-1 text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
-                    Con <code>POST /payment/links</code>. La respuesta trae{' '}
+                    Con <code>POST /payment/sessions</code>. La respuesta trae{' '}
                     <code>data.token</code>. El API Secret nunca baja al navegador.
                   </p>
                 </Step>
@@ -2349,7 +2349,7 @@ if (res.token) {
               <Notice kind="info" className="mt-[var(--space-sm)]">
                 <p className="font-medium text-[var(--color-ink)]">Prueba de punta a punta</p>
                 <p className="mt-1">
-                  Crea un link con <span className="num">POST /payment/links</span>, ábrelo con el{' '}
+                  Crea un link con <span className="num">POST /payment/sessions</span>, ábrelo con el{' '}
                   <button type="button" className="link" onClick={() => goTo('sdk')}>
                     SDK
                   </button>

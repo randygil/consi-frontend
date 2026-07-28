@@ -23,7 +23,10 @@ import type {
   MerchantProfile,
   OnboardMerchantInput,
   OpsNotification,
-  PaymentLinkSummary,
+  CheckoutSessionSummary,
+  Terminal,
+  TerminalDetail,
+  UpsertTerminalInput,
   PaymentMethod,
   PayoutQuote,
   PlatformStats,
@@ -204,18 +207,32 @@ export const api = {
 
   getLatestRate: () => request<ExchangeRate>('/exchange-rates/latest'),
 
-  getPaymentLinks: () => request<PaymentLinkSummary[]>('/payment-links'),
-  createPaymentLink: (input: {
+  getCheckoutSessions: () => request<CheckoutSessionSummary[]>('/checkout-sessions'),
+  /**
+   * Open a checkout session. Everything but `amount` is optional: the terminal supplies
+   * the rails, the pricing currency and the redirect, so the form only sends overrides.
+   */
+  createCheckoutSession: (input: {
     amount: string;
-    currency: Currency;
+    terminal?: string;
+    currency?: Currency;
     description?: string;
-    methods: PaymentMethod[];
+    methods?: PaymentMethod[];
     successUrl?: string;
+    shareable?: boolean;
   }) =>
-    request<PaymentLinkSummary>('/payment-links', {
+    request<CheckoutSessionSummary>('/checkout-sessions', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  // ---- Terminals (points of sale) ----
+  getTerminals: () => request<Terminal[]>('/terminals'),
+  getTerminal: (id: string) => request<TerminalDetail>(`/terminals/${id}`),
+  createTerminal: (input: UpsertTerminalInput) =>
+    request<Terminal>('/terminals', { method: 'POST', body: JSON.stringify(input) }),
+  updateTerminal: (id: string, input: UpsertTerminalInput) =>
+    request<Terminal>(`/terminals/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
 
   // ---- Admin ----
   adminGetStats: () => request<PlatformStats>('/admin/stats'),

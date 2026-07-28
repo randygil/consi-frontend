@@ -68,13 +68,25 @@ export function CardDropIn({ onSuccess, onError, onLoadingChange }: CardDropInPr
     return sum % 10 === 0;
   };
 
+  // Amex is 15 digits (4-6-5), every other brand we accept is 16. The field used to
+  // take 19 — the Maestro/Visa long-PAN ceiling — which let a payer type past the end
+  // of their own card with no feedback until submit.
+  // ponytail: 16 is the hard cap for non-Amex; widen if an acquirer sends 19-digit BINs.
+  const isAmex = /^3[47]/.test(pan.replace(/\s+/g, ''));
+  const panMaxDigits = isAmex ? 15 : 16;
+
   // Input formatters
   const handlePanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, '');
-    // Limit to 19 digits max
-    value = value.slice(0, 19);
-    // Add space every 4 digits
-    const formatted = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+    const digits = e.target.value.replace(/\D/g, '');
+    const max = /^3[47]/.test(digits) ? 15 : 16;
+    const value = digits.slice(0, max);
+    // Amex groups 4-6-5; everything else in fours.
+    const formatted =
+      max === 15
+        ? value.replace(/^(\d{4})(\d{0,6})(\d{0,5})$/, (_, a, b, c) =>
+            [a, b, c].filter(Boolean).join(' '),
+          )
+        : value.replace(/(\d{4})(?=\d)/g, '$1 ');
     setPan(formatted);
     setPanError('');
   };
@@ -109,6 +121,9 @@ export function CardDropIn({ onSuccess, onError, onLoadingChange }: CardDropInPr
     // Validate PAN
     if (!rawPan) {
       setPanError('Requerido');
+      isValid = false;
+    } else if (rawPan.length < panMaxDigits) {
+      setPanError(`Faltan dígitos (${rawPan.length}/${panMaxDigits})`);
       isValid = false;
     } else if (!validateLuhn(rawPan)) {
       setPanError('Número de tarjeta inválido');
@@ -194,7 +209,9 @@ export function CardDropIn({ onSuccess, onError, onLoadingChange }: CardDropInPr
           type="text"
           inputMode="numeric"
           autoComplete="cc-number"
-          placeholder="0000 0000 0000 0000"
+          placeholder={isAmex ? '0000 000000 00000' : '0000 0000 0000 0000'}
+          // Digits + the separating spaces, so the field stops where the card does.
+          maxLength={isAmex ? 17 : 19}
           value={pan}
           onChange={handlePanChange}
           disabled={loading}

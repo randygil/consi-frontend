@@ -18,6 +18,7 @@ const COMMANDS: Command[] = [
     href: n.href,
   })),
   { group: 'Acciones', label: 'Crear link de pago', keywords: 'nuevo cobrar', href: '/links' },
+  { group: 'Acciones', label: 'Nueva terminal', keywords: 'punto de venta pos canal', href: '/terminals' },
   { group: 'Acciones', label: 'Solicitar retiro', keywords: 'payout sacar', href: '/payouts' },
   { group: 'Acciones', label: 'Ver claves de API', keywords: 'api key secret', href: '/developers' },
   { group: 'Acciones', label: 'Mi perfil', keywords: 'cuenta password perfil', href: '/profile' },

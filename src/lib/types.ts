@@ -64,6 +64,9 @@ export interface Transaction {
   provider?: string | null;
   method?: PaymentMethod | null;
   order?: string | null;
+  /** Point of sale the money came in through. Null on payouts (money leaving). */
+  terminalId?: string | null;
+  terminal?: { code: string; name: string; channel: TerminalChannel } | null;
 }
 
 /** A registered payer of the merchant. email + name required; cédula for VES methods. */
@@ -199,7 +202,7 @@ export interface MerchantPolicy {
 }
 
 export type PaymentMethod = 'PAGO_MOVIL' | 'TRANSFER' | 'USDT' | 'CARD' | 'OTP_DEBIT' | 'C2P' | 'ZELLE';
-export type PaymentLinkStatus = 'ACTIVE' | 'PAID' | 'EXPIRED' | 'CANCELLED';
+export type CheckoutSessionStatus = 'ACTIVE' | 'PAID' | 'EXPIRED' | 'CANCELLED';
 
 /** Public payload powering the hosted checkout page at /c/{token}. No secrets. */
 export interface CheckoutData {
@@ -210,7 +213,7 @@ export interface CheckoutData {
   usdEquivalent: string;
   description: string | null;
   methods: { method: PaymentMethod; label: string }[];
-  status: PaymentLinkStatus;
+  status: CheckoutSessionStatus;
   successUrl: string | null;
   reference: string | null;
 }
@@ -237,7 +240,7 @@ export interface PayResult {
 }
 
 export interface CheckoutStatus {
-  status: PaymentLinkStatus;
+  status: CheckoutSessionStatus;
   transactionStatus: TransactionStatus | null;
   reference: string | null;
 }
@@ -372,17 +375,86 @@ export interface OpsNotification {
   createdAt: string;
 }
 
-/** A payment link as listed in the merchant dashboard. */
-export interface PaymentLinkSummary {
+/** The terminal (point of sale) a session belongs to, as carried in list payloads. */
+export interface TerminalRef {
+  code: string;
+  name: string;
+}
+
+/**
+ * A checkout session as listed in the merchant dashboard. `shareable` is what makes it
+ * a "link de pago" in the UI: true = a URL the merchant sends, false = a session opened
+ * by their server and embedded with consi.js.
+ */
+export interface CheckoutSessionSummary {
   token: string;
   url: string;
   amount: string;
   currency: Currency;
   description: string | null;
   methods: PaymentMethod[];
-  status: PaymentLinkStatus;
+  shareable: boolean;
+  status: CheckoutSessionStatus;
   selectedMethod: PaymentMethod | null;
+  terminalId: string;
+  terminal: TerminalRef | null;
   createdAt: string;
+}
+
+/** Body for creating/editing a terminal. `code` is absent: it is allocated, not chosen. */
+export interface UpsertTerminalInput {
+  name: string;
+  channel: TerminalChannel;
+  methods: PaymentMethod[];
+  defaultCurrency?: Currency;
+  successUrl?: string;
+  active?: boolean;
+}
+
+/** Sales channel a terminal represents. Labels only — it drives no behaviour. */
+export type TerminalChannel = 'ECOMMERCE' | 'POS' | 'MOBILE_APP' | 'LINK' | 'API';
+
+/**
+ * Settled payin volume for one terminal in one settlement asset. Per currency on
+ * purpose — USD, VES and USDT are separate ledgers, so there is no single total and
+ * showing one would invent an exchange rate nobody agreed to.
+ */
+export interface TerminalTotal {
+  currency: Currency;
+  /** What the payers sent. */
+  gross: string;
+  /** What the merchant keeps after commission and tax. */
+  net: string;
+  count: number;
+}
+
+/** A terminal as listed in the merchant dashboard. */
+export interface Terminal {
+  id: string;
+  /** Channel number, unique per merchant ("01"). Immutable once issued. */
+  code: string;
+  /** merchant code + terminal code, e.g. "CNS-0042-01" — the reconciliation identity. */
+  fullCode: string;
+  name: string;
+  channel: TerminalChannel;
+  methods: PaymentMethod[];
+  defaultCurrency: Currency | null;
+  successUrl: string | null;
+  active: boolean;
+  createdAt: string;
+  _count: { transactions: number; checkoutSessions: number };
+  /** Settled (COMPLETED) payin volume per currency. */
+  totals: TerminalTotal[];
+}
+
+/** One terminal with its books and its recent activity. */
+export interface TerminalDetail extends Terminal {
+  /** COMPLETED payins — money actually earned through this channel. */
+  settled: TerminalTotal[];
+  /** PENDING/AUTHORIZED payins — never added to `settled`. */
+  pending: TerminalTotal[];
+  transactions: Transaction[];
+  sessions: CheckoutSessionSummary[];
 }
 
 export interface Dispute {

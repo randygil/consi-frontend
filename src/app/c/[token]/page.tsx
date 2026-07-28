@@ -32,47 +32,17 @@ import { Notice } from '@/components/ui/page-head';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { checkoutApi } from '@/lib/checkout-client';
 import { formatMoney } from '@/lib/format';
+import {
+  resolveCustomer,
+  SETTLES_IN_VES,
+  type CustomerForm,
+  type PayerError,
+} from '@/lib/payer';
 import { PAYMENT_METHODS } from '@/lib/payment-methods';
-import type {
-  CheckoutData,
-  Currency,
-  CustomerInput,
-  PaymentInstructions,
-  PaymentMethod,
-} from '@/lib/types';
+import type { CheckoutData, PaymentInstructions, PaymentMethod } from '@/lib/types';
 
 // Test shortcuts are a local convenience — they must never reach a build.
 const DEV = process.env.NODE_ENV === 'development';
-
-type CustomerForm = { firstName: string; lastName: string; email: string; cedula: string };
-
-/**
- * Validate the payer details and build the customer payload. Cédula + full data are
- * required for VES (Venezuelan) methods; for USD they're optional. Returns an error
- * message or the (possibly undefined) customer to send.
- */
-function resolveCustomer(
-  c: CustomerForm,
-  currency?: Currency,
-): { error: string } | { customer?: CustomerInput } {
-  if (currency === 'VES') {
-    if (!c.firstName.trim() || !c.lastName.trim() || !c.email.trim())
-      return { error: 'Ingresa tu nombre, apellido y correo' };
-    if (!c.cedula.trim())
-      return { error: 'La cédula es obligatoria para pagos en bolívares' };
-  }
-  const has = c.firstName || c.lastName || c.email || c.cedula;
-  return {
-    customer: has
-      ? {
-          firstName: c.firstName.trim(),
-          lastName: c.lastName.trim(),
-          email: c.email.trim(),
-          cedula: c.cedula.trim() || undefined,
-        }
-      : undefined,
-  };
-}
 
 const METHOD_ICON: Record<PaymentMethod, React.ReactNode> = {
   PAGO_MOVIL: <Smartphone size={16} />,
@@ -104,6 +74,9 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
+  // The payer field the last validation failure points at — marked invalid and focused,
+  // so "falta la cédula" lands on the input instead of only in a notice.
+  const [badField, setBadField] = useState<keyof CustomerForm | null>(null);
   // Which rail is mid-request, so only that row reads "Creando…" rather than all of them.
   const [pending, setPending] = useState<PaymentMethod | null>(null);
   const [show3ds, setShow3ds] = useState(false);
@@ -138,11 +111,22 @@ export default function CheckoutPage() {
     return () => clearInterval(id);
   }, [step, token]);
 
+  /** Point the payer at the field that blocked them, don't just print a sentence. */
+  const rejectPayer = useCallback((e: PayerError) => {
+    setError(e.message);
+    setBadField(e.field);
+    document.getElementById(e.field)?.focus();
+  }, []);
+
   const choose = useCallback(
     async (m: PaymentMethod) => {
-      const resolved = resolveCustomer(customer, data?.currency);
+      // Clear first: a stale error from the previous rail must not survive into this
+      // attempt (picking card after a failed Pago Móvil used to keep the cédula notice).
+      setError(null);
+      setBadField(null);
+      const resolved = resolveCustomer(customer, m);
       if ('error' in resolved) {
-        setError(resolved.error);
+        rejectPayer(resolved.error);
         return;
       }
       if (m === 'CARD') {
@@ -163,7 +147,6 @@ export default function CheckoutPage() {
       }
       setBusy(true);
       setPending(m);
-      setError(null);
       try {
         const res = await checkoutApi.pay(token, m, undefined, resolved.customer);
         setInstructions(res.instructions);
@@ -175,13 +158,15 @@ export default function CheckoutPage() {
         setPending(null);
       }
     },
-    [token, customer, data],
+    [token, customer, data, rejectPayer],
   );
 
   const onTokenizeSuccess = useCallback(async (cardToken: string) => {
-    const resolved = resolveCustomer(customer, data?.currency);
+    const resolved = resolveCustomer(customer, 'CARD');
     if ('error' in resolved) {
-      setError(resolved.error);
+      // The payer fields live on the previous step, so send them back to fix it there.
+      setStep('method');
+      rejectPayer(resolved.error);
       return;
     }
     setBusy(true);
@@ -198,7 +183,7 @@ export default function CheckoutPage() {
     } finally {
       setBusy(false);
     }
-  }, [token, customer, data]);
+  }, [token, customer, rejectPayer]);
 
   const confirm = useCallback(async () => {
     setBusy(true);
@@ -293,6 +278,39 @@ export default function CheckoutPage() {
 
   const errorNotice = error ? <Notice kind="err">{error}</Notice> : null;
 
+  // Any VES-settling rail on this link means the payer's identity is mandatory — the
+  // backend will demand it at charge time regardless of what the link is priced in.
+  const needsPayerId = data.methods.some((m) => SETTLES_IN_VES[m.method]);
+  const mixedRails = needsPayerId && data.methods.some((m) => !SETTLES_IN_VES[m.method]);
+
+  /** One payer input, wired to the shared form state and the invalid-field marker. */
+  const payerField = (
+    field: keyof CustomerForm,
+    label: string,
+    extra?: React.InputHTMLAttributes<HTMLInputElement>,
+  ) => (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={field}>
+        {label}
+        {needsPayerId ? <span className="text-[var(--color-bad)]"> *</span> : null}
+      </Label>
+      <Input
+        id={field}
+        value={customer[field]}
+        aria-invalid={badField === field ? true : undefined}
+        onChange={(e) => {
+          setCustomer({ ...customer, [field]: e.target.value });
+          // Typing in the offending field clears the complaint about it.
+          if (badField === field) {
+            setBadField(null);
+            setError(null);
+          }
+        }}
+        {...extra}
+      />
+    </div>
+  );
+
   return (
     <>
       <div inert={show3ds}>
@@ -301,57 +319,42 @@ export default function CheckoutPage() {
 
           {step === 'method' && (
             <div className="mt-[var(--space-lg)] flex flex-col gap-[var(--space-lg)]">
+              {/* Above the form, not below the method list: the payer has to see what
+                * blocked them without scrolling past the thing they just clicked. */}
+              {errorNotice}
+
               <section>
                 <h2 className="text-[length:var(--text-md)]">Tus datos</h2>
                 <p className="mt-1 max-w-[52ch] text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
-                  {data.currency === 'VES'
+                  {needsPayerId
                     ? 'Los bancos venezolanos exigen tu identidad para conciliar el pago.'
                     : 'Opcional. Sólo lo usamos para enviarte el comprobante.'}
                 </p>
 
                 <div className="mt-[var(--space-sm)] flex flex-col gap-[var(--space-sm)]">
                   <div className="grid grid-cols-1 gap-[var(--space-sm)] min-[360px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="firstName">Nombre</Label>
-                      <Input
-                        id="firstName"
-                        autoComplete="given-name"
-                        value={customer.firstName}
-                        onChange={(e) => setCustomer({ ...customer, firstName: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="lastName">Apellido</Label>
-                      <Input
-                        id="lastName"
-                        autoComplete="family-name"
-                        value={customer.lastName}
-                        onChange={(e) => setCustomer({ ...customer, lastName: e.target.value })}
-                      />
-                    </div>
+                    {payerField('firstName', 'Nombre', { autoComplete: 'given-name' })}
+                    {payerField('lastName', 'Apellido', { autoComplete: 'family-name' })}
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="email">Correo electrónico</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      autoComplete="email"
-                      value={customer.email}
-                      onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                    />
-                  </div>
-                  {data.currency === 'VES' && (
+                  {payerField('email', 'Correo electrónico', {
+                    type: 'email',
+                    autoComplete: 'email',
+                  })}
+                  {needsPayerId ? (
                     <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="cedula">Cédula / RIF</Label>
-                      <Input
-                        id="cedula"
-                        placeholder="V-12345678"
-                        className="font-[family-name:var(--font-mono)]"
-                        value={customer.cedula}
-                        onChange={(e) => setCustomer({ ...customer, cedula: e.target.value })}
-                      />
+                      {payerField('cedula', 'Cédula / RIF', {
+                        placeholder: 'V-12345678',
+                        className: 'font-[family-name:var(--font-mono)]',
+                      })}
+                      {/* Only worth saying when some rails on this link don't need it. */}
+                      {mixedRails ? (
+                        <p className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                          Obligatoria para pagar en bolívares (Pago Móvil, transferencia, tarjeta,
+                          C2P).
+                        </p>
+                      ) : null}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </section>
 
@@ -376,8 +379,6 @@ export default function CheckoutPage() {
                   ))}
                 </ul>
               </section>
-
-              {errorNotice}
             </div>
           )}
 
@@ -402,6 +403,7 @@ export default function CheckoutPage() {
                 setPhone('');
                 setEmail('');
                 setError(null);
+                setBadField(null);
                 setStep('method');
               }}
               onTokenizeSuccess={onTokenizeSuccess}

@@ -7,6 +7,7 @@
  */
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,15 +19,16 @@ import { Notice, PageHead } from '@/components/ui/page-head';
 import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api-client';
 import { formatDate, formatMoney, statusLabel } from '@/lib/format';
-import type { Transaction } from '@/lib/types';
+import type { Terminal, Transaction } from '@/lib/types';
 
-const EMPTY_FILTERS = { status: '', currency: '', from: '', to: '' };
+const EMPTY_FILTERS = { status: '', currency: '', terminalId: '', from: '', to: '' };
 
 /** Server-side filters travel as query params; the DataTable filters on top of the result. */
 function toParams(filters: typeof EMPTY_FILTERS, extra: Record<string, string> = {}) {
   const params: Record<string, string> = { type: 'PAYIN', ...extra };
   if (filters.status) params.status = filters.status;
   if (filters.currency) params.currency = filters.currency;
+  if (filters.terminalId) params.terminalId = filters.terminalId;
   if (filters.from) params.from = new Date(filters.from).toISOString();
   if (filters.to) params.to = new Date(filters.to).toISOString();
   return params;
@@ -42,7 +44,11 @@ export default function TransactionsPage() {
   const [rows, setRows] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  // Deep-linkable from a terminal's page ("ver todos en Cobros"), so the filter starts
+  // from the URL rather than resetting the moment the merchant navigates here.
+  const initialTerminalId = useSearchParams().get('terminalId') ?? '';
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, terminalId: initialTerminalId });
+  const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refunding, setRefunding] = useState<Transaction | null>(null);
 
@@ -61,6 +67,13 @@ export default function TransactionsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    api
+      .getTerminals()
+      .then(setTerminals)
+      .catch(() => setTerminals([]));
+  }, []);
 
   const set =
     (k: keyof typeof filters) => (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) =>
@@ -111,6 +124,26 @@ export default function TransactionsPage() {
             </Link>
           ) : (
             <span className="text-[var(--color-ink-3)]">{t.customerName ?? '—'}</span>
+          ),
+      },
+      {
+        id: 'terminal',
+        header: 'Terminal',
+        // The accounting dimension, so it is visible by default and exported: the whole
+        // point is telling POS income from app income without inferring it from `method`.
+        value: (t) => t.terminal?.name ?? '',
+        text: (t) => (t.terminal ? `${t.terminal.code} · ${t.terminal.name}` : '—'),
+        cell: (t) =>
+          t.terminal ? (
+            <Link
+              href={`/terminals/${t.terminalId}`}
+              className="text-[var(--color-ink-2)] underline-offset-4 hover:text-[var(--color-accent)] hover:underline"
+            >
+              <span className="num text-[var(--color-ink-4)]">{t.terminal.code}</span>{' '}
+              {t.terminal.name}
+            </Link>
+          ) : (
+            <span className="text-[var(--color-ink-4)]">—</span>
           ),
       },
       {
@@ -311,6 +344,19 @@ export default function TransactionsPage() {
                 <option value="USD">USD</option>
                 <option value="VES">VES</option>
                 <option value="USDT">USDT</option>
+              </Select>
+              <Select
+                aria-label="Filtrar por terminal"
+                value={filters.terminalId}
+                onChange={set('terminalId')}
+                className="h-9 w-auto"
+              >
+                <option value="">Todas las terminales</option>
+                {terminals.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.code} · {t.name}
+                  </option>
+                ))}
               </Select>
               <Input
                 type="date"

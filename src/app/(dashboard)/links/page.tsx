@@ -13,7 +13,7 @@ import { api } from '@/lib/api-client';
 import { formatDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { DEFAULT_METHODS, METHOD_CATEGORIES } from '@/lib/payment-methods';
-import type { Currency, PaymentLinkSummary, PaymentMethod } from '@/lib/types';
+import type { Currency, CheckoutSessionSummary, PaymentMethod, Terminal } from '@/lib/types';
 
 const CURRENCIES: Currency[] = ['USD', 'VES'];
 
@@ -35,12 +35,27 @@ const chip = (on: boolean) =>
       : 'border-[var(--color-rule)] text-[var(--color-ink-3)] hover:border-[var(--color-rule-2)] hover:text-[var(--color-ink)]',
   );
 
-const LINK_COLUMNS: Column<PaymentLinkSummary>[] = [
+const LINK_COLUMNS: Column<CheckoutSessionSummary>[] = [
   {
     id: 'description',
     header: 'Descripción',
     value: (l) => l.description ?? '',
     cell: (l) => <span className="text-[var(--color-ink)]">{l.description ?? '—'}</span>,
+  },
+  {
+    id: 'terminal',
+    header: 'Terminal',
+    value: (l) => l.terminal?.name ?? '',
+    text: (l) => (l.terminal ? `${l.terminal.code} · ${l.terminal.name}` : '—'),
+    cell: (l) =>
+      l.terminal ? (
+        <span className="text-[var(--color-ink-2)]">
+          <span className="num text-[var(--color-ink-4)]">{l.terminal.code}</span>{' '}
+          {l.terminal.name}
+        </span>
+      ) : (
+        <span className="text-[var(--color-ink-4)]">—</span>
+      ),
   },
   { id: 'currency', header: 'Moneda', num: true, align: 'left', value: (l) => l.currency },
   {
@@ -87,27 +102,56 @@ const LINK_COLUMNS: Column<PaymentLinkSummary>[] = [
 ];
 
 export default function LinksPage() {
-  const [links, setLinks] = useState<PaymentLinkSummary[]>([]);
+  const [links, setLinks] = useState<CheckoutSessionSummary[]>([]);
+  const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [amount, setAmount] = useState('');
+  const [terminalCode, setTerminalCode] = useState<string | null>(null);
   const [currency, setCurrency] = useState<Currency>('USD');
   const [description, setDescription] = useState('');
   const [methods, setMethods] = useState<PaymentMethod[]>(DEFAULT_METHODS);
+  /** False until the merchant edits the rails — until then the terminal's win. */
+  const [methodsTouched, setMethodsTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = () =>
     api
-      .getPaymentLinks()
+      .getCheckoutSessions()
       .then(setLinks)
       .catch(() => setLinks([]))
       .finally(() => setLoading(false));
   useEffect(() => {
     load();
+    api
+      .getTerminals()
+      .then((all) => {
+        const usable = all.filter((t) => t.active);
+        setTerminals(usable);
+        // Preselect the first terminal so the form opens already attributed.
+        if (usable[0]) applyTerminal(usable[0]);
+      })
+      .catch(() => setTerminals([]));
+    // applyTerminal only touches state setters, so it needs no dependency entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Adopt a terminal's configuration. The terminal is the config source, so picking one
+   * pulls in its rails and pricing currency — unless the merchant already overrode them,
+   * in which case their edit is not silently discarded.
+   */
+  function applyTerminal(t: Terminal) {
+    setTerminalCode(t.code);
+    if (t.defaultCurrency) setCurrency(t.defaultCurrency);
+    setMethods((prev) => (methodsTouched ? prev : t.methods.length ? t.methods : DEFAULT_METHODS));
+  }
+
+  const selected = terminals.find((t) => t.code === terminalCode) ?? null;
+
   function toggleMethod(m: PaymentMethod) {
+    setMethodsTouched(true);
     setMethods((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
   }
 
@@ -116,11 +160,13 @@ export default function LinksPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.createPaymentLink({
+      await api.createCheckoutSession({
         amount,
+        terminal: terminalCode ?? undefined,
         currency,
         description: description || undefined,
-        methods,
+        // Only sent when overridden; otherwise the terminal's rails apply server-side.
+        methods: methodsTouched ? methods : undefined,
       });
       setAmount('');
       setDescription('');
@@ -148,6 +194,51 @@ export default function LinksPage() {
       {creating && (
         <Card className="p-[var(--space-md)]">
           <form onSubmit={create} className="flex flex-col gap-[var(--space-sm)]">
+            {/* Terminal first: it decides the rails and the currency, so choosing it
+              * before the amount means the rest of the form arrives pre-answered. */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>Terminal</Label>
+                <Link
+                  href="/terminals"
+                  className="text-[length:var(--text-xs)] text-[var(--color-accent)] underline-offset-4 hover:underline"
+                >
+                  Gestionar terminales
+                </Link>
+              </div>
+              {terminals.length === 0 ? (
+                <p className="text-[length:var(--text-sm)] text-[var(--color-ink-3)]">
+                  No tienes terminales activas.{' '}
+                  <Link href="/terminals" className="text-[var(--color-accent)] underline">
+                    Crea una
+                  </Link>{' '}
+                  para poder cobrar.
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {terminals.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        aria-pressed={terminalCode === t.code}
+                        onClick={() => applyTerminal(t)}
+                        className={chip(terminalCode === t.code)}
+                      >
+                        <span className="num text-[length:var(--text-xs)] opacity-70">{t.code}</span>
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                    {selected
+                      ? `Este cobro se contabiliza en ${selected.name} (${selected.fullCode}).`
+                      : 'Elige dónde se contabiliza este cobro.'}
+                  </p>
+                </>
+              )}
+            </div>
+
             <div className="grid gap-[var(--space-sm)] sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="amount">Monto</Label>
@@ -199,6 +290,14 @@ export default function LinksPage() {
                   ¿Qué significa cada uno?
                 </Link>
               </div>
+
+              <p className="text-[length:var(--text-xs)] text-[var(--color-ink-4)]">
+                {methodsTouched
+                  ? 'Estás sobrescribiendo los métodos de la terminal sólo para este cobro.'
+                  : selected
+                    ? `Heredados de ${selected.name}. Cámbialos si este cobro es la excepción.`
+                    : 'Elige los métodos de este cobro.'}
+              </p>
 
               {METHOD_CATEGORIES.map(({ category, methods: catMethods }) => (
                 <div key={category} className="flex flex-col gap-1.5">
@@ -262,7 +361,7 @@ export default function LinksPage() {
             {error ? <Notice kind="err">{error}</Notice> : null}
 
             <div className="flex gap-2 pt-1">
-              <Button type="submit" disabled={busy || methods.length === 0}>
+              <Button type="submit" disabled={busy || methods.length === 0 || !terminalCode}>
                 {busy ? 'Creando…' : 'Crear link'}
               </Button>
               <Button type="button" variant="outline" onClick={() => setCreating(false)}>
@@ -275,7 +374,7 @@ export default function LinksPage() {
 
       <Card className="p-[var(--space-md)]">
         <DataTable
-          id="payment-links"
+          id="checkout-sessions"
           caption="Links de pago"
           columns={LINK_COLUMNS}
           rows={links}
