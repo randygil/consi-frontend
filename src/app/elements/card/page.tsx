@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 function CardElementsContent() {
@@ -16,6 +16,7 @@ function CardElementsContent() {
   // Parse custom styling parameters from URL query params
   const [customStyle, setCustomStyle] = useState<any>({});
   const [mounted, setMounted] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -109,6 +110,27 @@ function CardElementsContent() {
     );
   }, [pan, expiry, cvv, cardHolder, errors]);
 
+  /* Tell the parent how tall we actually are. The iframe cannot size itself, so
+   * consi.js opens it at a guessed height and corrects it from here — the last
+   * field used to be cut in half whenever the merchant's font size, input padding
+   * or a wrapped validation message made the form taller than that guess. */
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const post = () =>
+      window.parent.postMessage(
+        {
+          type: 'consi:elements_resize',
+          height: Math.ceil(box.getBoundingClientRect().height),
+        },
+        '*',
+      );
+    const observer = new ResizeObserver(post);
+    observer.observe(box);
+    post();
+    return () => observer.disconnect();
+  }, [mounted]);
+
   // Listen for Tokenization command from parent window
   useEffect(() => {
     const handleMessage = async (e: MessageEvent) => {
@@ -166,52 +188,51 @@ function CardElementsContent() {
     return () => window.removeEventListener('message', handleMessage);
   }, [pan, expiry, cvv, cardHolder]);
 
-  function isDarkColor(hex: string): boolean {
-    if (!hex || hex[0] !== '#') return false;
-    let clean = hex.substring(1);
-    if (clean.length === 3) {
-      clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
-    }
-    const r = parseInt(clean.substring(0, 2), 16);
-    const g = parseInt(clean.substring(2, 4), 16);
-    const b = parseInt(clean.substring(4, 6), 16);
-    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    return luma < 140;
-  }
-
   if (!mounted) {
     return null;
   }
 
-  const bg = customStyle.background ?? '#ffffff';
-  const isDark = isDarkColor(bg);
+  /* Every fallback below is derived from the two colours the merchant sends —
+   * `background` and `color` — never guessed from them. Guessing is what broke
+   * the dark themes: the old code sniffed the luma of `background` as a hex
+   * string, read a modern colour like `oklch(10.5% .012 266)` as "not dark", and
+   * painted a white field under white text.
+   *
+   * `||` and not `??`: a merchant reading its own CSS custom properties hands us
+   * an EMPTY STRING for a token that does not exist, and `?? ` lets that through
+   * as `color: ''`. */
+  const pick = (value: unknown, fallback: string) =>
+    typeof value === 'string' && value.trim() ? value : fallback;
 
-  // Default theme fallback style properties
   const styles = {
-    background: bg,
-    color: customStyle.color ?? (isDark ? '#f8fafc' : '#0f172a'),
-    fontFamily: customStyle.fontFamily ?? 'system-ui, -apple-system, sans-serif',
-    fontSize: customStyle.fontSize ?? '14px',
-    borderColor: customStyle.borderColor ?? (isDark ? '#2d3748' : '#e2e8f0'),
-    borderRadius: customStyle.borderRadius ?? '8px',
-    inputPadding: customStyle.inputPadding ?? '10px 14px',
-    inputBackground: customStyle.inputBackground ?? (isDark ? '#1e293b' : '#ffffff'),
-    gridGap: customStyle.gridGap ?? '16px',
-    labelColor: isDark ? '#94a3b8' : '#64748b',
-    focusBorderColor: isDark ? '#7c5cfb' : '#2f7bf6',
-    focusGlow: isDark ? 'rgba(124, 92, 251, 0.25)' : 'rgba(47, 123, 246, 0.25)',
+    background: pick(customStyle.background, '#ffffff'),
+    color: pick(customStyle.color, '#0f172a'),
+    fontFamily: pick(customStyle.fontFamily, 'system-ui, -apple-system, sans-serif'),
+    fontSize: pick(customStyle.fontSize, '14px'),
+    borderColor: pick(customStyle.borderColor, 'color-mix(in oklab, currentColor 28%, transparent)'),
+    borderRadius: pick(customStyle.borderRadius, '8px'),
+    inputPadding: pick(customStyle.inputPadding, '10px 14px'),
+    // The field sits ON the surface the merchant named, so it inherits it. The
+    // border is what separates them, not a contrasting fill.
+    inputBackground: pick(customStyle.inputBackground, pick(customStyle.background, '#ffffff')),
+    gridGap: pick(customStyle.gridGap, '16px'),
+    labelColor: 'color-mix(in oklab, currentColor 65%, transparent)',
+    placeholderColor: 'color-mix(in oklab, currentColor 45%, transparent)',
+    focusBorderColor: pick(customStyle.focusBorderColor, 'currentColor'),
+    focusGlow: 'color-mix(in oklab, currentColor 22%, transparent)',
   };
 
   return (
     <div
+      ref={boxRef}
       style={{
         background: styles.background,
         color: styles.color,
         fontFamily: styles.fontFamily,
         fontSize: styles.fontSize,
-        padding: '2px',
+        // Room for the 3px focus ring: at 2px the iframe edge clipped it.
+        padding: '4px',
         boxSizing: 'border-box',
-        overflow: 'hidden',
       }}
     >
       <style>{`
@@ -237,8 +258,8 @@ function CardElementsContent() {
           transition: border-color 0.2s, box-shadow 0.2s;
         }
         .consi-el-input::placeholder {
-          color: ${isDark ? '#64748b' : '#94a3b8'} !important;
-          opacity: 0.8;
+          color: ${styles.placeholderColor} !important;
+          opacity: 1;
         }
         .consi-el-input:focus {
           border-color: ${styles.focusBorderColor};

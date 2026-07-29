@@ -109,14 +109,19 @@
         var mergedStyle = Object.assign({}, options.style || {}, elementOptions.style || {});
         var styleParam = encodeURIComponent(JSON.stringify(mergedStyle));
         iframe.src = ORIGIN + '/elements/card?style=' + styleParam;
+        // Initial height only. The form measures itself and posts its real height
+        // back (consi:elements_resize) — a fixed one clipped the last field as soon
+        // as the merchant's font size or input padding grew.
         iframe.style.cssText = 'width:100%;height:220px;border:0;background:transparent;overflow:hidden;';
         iframe.setAttribute('title', 'Secure Card Input');
 
         container.appendChild(iframe);
 
         function handleMessage(e) {
-          if (e.origin !== ORIGIN) return;
-          if (e.data.type === 'consi:elements_change') {
+          if (e.origin !== ORIGIN || !e.data) return;
+          if (e.data.type === 'consi:elements_resize') {
+            if (iframe && e.data.height > 0) iframe.style.height = e.data.height + 'px';
+          } else if (e.data.type === 'consi:elements_change') {
             if (typeof onChangeHandler === 'function') {
               onChangeHandler(e.data);
             }
